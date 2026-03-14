@@ -5,7 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Choudhary GITHUB – Market Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 
 :root {
@@ -453,6 +452,21 @@ body {
   border-radius: 8px;
   background: var(--surface2);
 }
+
+/* ── CHART EXTERNAL BUTTONS ── */
+.chart-ext-btn {
+  display: inline-block;
+  padding: 4px 12px;
+  border-radius: 6px;
+  font-size: 0.72rem;
+  font-weight: 600;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--muted2);
+  text-decoration: none;
+  transition: all 0.15s;
+}
+.chart-ext-btn:hover { border-color: var(--accent); color: var(--accent); }
 
 /* ── CHART BUTTONS ── */
 .chart-btn {
@@ -904,15 +918,44 @@ body {
 <!-- ── LIVE CHART ── -->
 <div class="section-label">Nifty 50 Live Chart</div>
 <div class="panel">
-  <h3>Intraday Chart</h3>
-  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap" id="chartIntervalBtns">
-    <button onclick="setChartInterval('1')"  class="chart-btn" id="btn-1">1m</button>
-    <button onclick="setChartInterval('5')"  class="chart-btn" id="btn-5">5m</button>
-    <button onclick="setChartInterval('15')" class="chart-btn active" id="btn-15">15m</button>
-    <button onclick="setChartInterval('60')" class="chart-btn" id="btn-60">1H</button>
-    <button onclick="setChartInterval('D')"  class="chart-btn" id="btn-D">1D</button>
+  <h3>Nifty 50 — Intraday Chart</h3>
+  <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
+    <span style="font-size:0.72rem;color:var(--muted);margin-right:4px">Open in:</span>
+    <a href="https://www.nseindia.com/market-data/live-equity-market" target="_blank" class="chart-ext-btn">NSE India</a>
+    <a href="https://www.moneycontrol.com/indian-indices/nifty-50-9.html" target="_blank" class="chart-ext-btn">Moneycontrol</a>
+    <a href="https://finance.yahoo.com/quote/%5ENSEI/" target="_blank" class="chart-ext-btn">Yahoo Finance</a>
+    <a href="https://www.screener.in/" target="_blank" class="chart-ext-btn">Screener</a>
+    <a href="https://in.tradingview.com/chart/?symbol=NSE%3ANIFTY" target="_blank" class="chart-ext-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)">TradingView ↗</a>
   </div>
-  <div id="tradingview-chart"></div>
+
+  <!-- NSE Nifty chart via Dhan HQ public embed -->
+  <div id="chartTabBar" style="display:flex;gap:4px;margin-bottom:0;border-bottom:1px solid var(--border);padding-bottom:0">
+    <button class="tab-btn active" onclick="showChartTab('dhan',this)">Dhan Chart</button>
+    <button class="tab-btn" onclick="showChartTab('google',this)">Google Finance</button>
+  </div>
+
+  <div id="chartTab-dhan" style="margin-top:0">
+    <iframe
+      src="https://web.dhan.co/charts/index.html?v=3&type=NSE_EQ&symbol=NIFTY&theme=dark"
+      style="width:100%;height:480px;border:none;border-radius:0 0 8px 8px;display:block;background:var(--surface2)"
+      loading="lazy"
+      title="Nifty 50 Chart">
+    </iframe>
+  </div>
+
+  <div id="chartTab-google" style="display:none;margin-top:0">
+    <iframe
+      src="https://www.google.com/finance/chart?q=INDEXNSE:NIFTY_50&tlf=1d&cht=c&chst=vkc"
+      style="width:100%;height:480px;border:none;border-radius:0 0 8px 8px;display:block;background:var(--surface2)"
+      loading="lazy"
+      title="Nifty 50 Google Finance Chart">
+    </iframe>
+  </div>
+
+  <div style="font-size:0.68rem;color:var(--muted);margin-top:8px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px">
+    <span>If chart doesn't load, use the external links above ↑</span>
+    <span>Chart reloads every 5 min automatically</span>
+  </div>
 </div>
 
 <!-- ── NEWS ── -->
@@ -1618,73 +1661,21 @@ async function fetchRSS(url, id) {
   } catch { document.querySelector("#" + id + " .content").innerHTML = "<div style='color:var(--muted)'>Feed unavailable</div>"; }
 }
 
-/* ─── TRADINGVIEW CHART ─── */
-let tvWidget = null;
-let currentInterval = "15";
-
-function initTVChart(interval) {
-  document.getElementById("tradingview-chart").innerHTML = "";
-  const script = document.createElement("script");
-  script.src = "https://s3.tradingview.com/tv.js";
-  script.onload = function () {
-    tvWidget = new TradingView.widget({
-      container_id: "tradingview-chart",
-      width: "100%",
-      height: 420,
-      symbol: "NSE:NIFTY",
-      interval: interval,
-      timezone: "Asia/Kolkata",
-      theme: "dark",
-      style: "1",
-      locale: "en",
-      toolbar_bg: "#2a2a2a",
-      enable_publishing: false,
-      hide_top_toolbar: false,
-      hide_legend: false,
-      save_image: false,
-      backgroundColor: "#2a2a2a",
-      gridColor: "#3d3d3d",
-      studies: ["RSI@tv-basicstudies", "MACD@tv-basicstudies"],
-      withdateranges: true,
-    });
-  };
-  document.head.appendChild(script);
+/* ─── CHART TAB SWITCHER ─── */
+function showChartTab(tab, btn) {
+  document.querySelectorAll("#chartTabBar .tab-btn").forEach(b => b.classList.remove("active"));
+  btn.classList.add("active");
+  document.getElementById("chartTab-dhan").style.display   = tab === "dhan"   ? "block" : "none";
+  document.getElementById("chartTab-google").style.display = tab === "google" ? "block" : "none";
 }
 
-function setChartInterval(interval) {
-  currentInterval = interval;
-  document.querySelectorAll(".chart-btn").forEach(b => b.classList.remove("active"));
-  const btnId = "btn-" + interval;
-  const btn = document.getElementById(btnId);
-  if (btn) btn.classList.add("active");
-  // If TradingView already loaded, re-init with new interval
-  if (window.TradingView) {
-    document.getElementById("tradingview-chart").innerHTML = "";
-    tvWidget = new TradingView.widget({
-      container_id: "tradingview-chart",
-      width: "100%",
-      height: 420,
-      symbol: "NSE:NIFTY",
-      interval: interval,
-      timezone: "Asia/Kolkata",
-      theme: "dark",
-      style: "1",
-      locale: "en",
-      toolbar_bg: "#2a2a2a",
-      enable_publishing: false,
-      hide_top_toolbar: false,
-      save_image: false,
-      backgroundColor: "#2a2a2a",
-      gridColor: "#3d3d3d",
-      studies: ["RSI@tv-basicstudies", "MACD@tv-basicstudies"],
-      withdateranges: true,
-    });
-  } else {
-    initTVChart(interval);
-  }
-}
-
-initTVChart("15");
+// Auto-reload chart iframes every 5 min to keep data fresh
+setInterval(() => {
+  ["chartTab-dhan", "chartTab-google"].forEach(id => {
+    const iframe = document.querySelector(`#${id} iframe`);
+    if (iframe) { const src = iframe.src; iframe.src = ""; iframe.src = src; }
+  });
+}, 5 * 60 * 1000);
 
 /* ─── AUTO-REFRESH INDICATOR ─── */
 let refreshCountdown = 15;
@@ -1890,7 +1881,7 @@ setInterval(loadGlobal, 60000);
 setInterval(loadGiftPanel, 60000);
 setInterval(loadCommodities, 60000);
 setInterval(loadTicker, 60000);
-setInterval(loadPCR, 15 * 60 * 1000);  // every 15 min for intraday chart
+setInterval(loadPCR, 15 * 60 * 1000);
 setInterval(loadAdvanceDecline, 300000);
 setInterval(load52Week, 300000);
 setInterval(loadAnnouncements, 600000);

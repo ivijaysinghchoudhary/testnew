@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Choudhary GITHUB – Market Dashboard</title>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 
 :root {
@@ -629,6 +630,250 @@ body {
 }
 .hm-price { font-size: 0.68rem; color: rgba(255,255,255,0.65); margin-top: 3px; }
 
+/* ── SIGNAL ENGINE ── */
+.signal-panel {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.signal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.signal-title {
+  font-family: 'Inter', sans-serif;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.signal-expiry {
+  font-size: 0.7rem;
+  color: var(--muted2);
+  background: var(--surface2);
+  padding: 3px 10px;
+  border-radius: 20px;
+  border: 1px solid var(--border2);
+}
+.signal-main {
+  padding: 16px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+@media (max-width: 768px) { .signal-main { grid-template-columns: 1fr; } }
+
+.signal-card {
+  border-radius: 10px;
+  padding: 14px 16px;
+  border: 2px solid transparent;
+  position: relative;
+  overflow: hidden;
+}
+.signal-card.bullish  { background: rgba(34,197,94,0.07);  border-color: rgba(34,197,94,0.3); }
+.signal-card.bearish  { background: rgba(239,68,68,0.07);  border-color: rgba(239,68,68,0.3); }
+.signal-card.sideways { background: rgba(245,158,11,0.07); border-color: rgba(245,158,11,0.3); }
+.signal-card.danger   { background: rgba(239,68,68,0.12);  border-color: rgba(239,68,68,0.5); }
+
+.sig-direction {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.6rem;
+  font-weight: 800;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+.sig-subtitle { font-size: 0.72rem; color: var(--muted2); margin-bottom: 10px; }
+.sig-confidence {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  padding: 3px 10px;
+  border-radius: 20px;
+  margin-bottom: 12px;
+}
+.conf-high   { background: rgba(34,197,94,0.2);  color: #22c55e; }
+.conf-medium { background: rgba(245,158,11,0.2); color: #f59e0b; }
+.conf-low    { background: rgba(239,68,68,0.2);  color: #ef4444; }
+
+.sig-strike-box {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.sig-strike-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+.sig-strike-val   { font-size: 1.1rem; font-weight: 700; }
+.sig-targets { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 10px; }
+.sig-target {
+  flex: 1; min-width: 70px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 6px;
+  padding: 6px 8px;
+  text-align: center;
+  font-size: 0.7rem;
+}
+.sig-target .tgt-label { color: var(--muted); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; }
+.sig-target .tgt-val   { font-weight: 700; margin-top: 2px; }
+.sig-sl {
+  font-size: 0.72rem;
+  padding: 6px 10px;
+  background: rgba(239,68,68,0.08);
+  border: 1px solid rgba(239,68,68,0.2);
+  border-radius: 6px;
+  color: #ef4444;
+  font-weight: 600;
+}
+.sig-reason {
+  font-size: 0.72rem;
+  color: var(--muted2);
+  line-height: 1.6;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  margin-top: 10px;
+}
+.sig-reason strong { color: var(--text); }
+
+/* Signal log */
+.signal-log {
+  border-top: 1px solid var(--border);
+  padding: 12px 16px;
+  max-height: 180px;
+  overflow-y: auto;
+}
+.signal-log::-webkit-scrollbar { width: 3px; }
+.signal-log::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 2px; }
+.sig-log-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 5px 0;
+  border-bottom: 1px solid var(--border);
+  font-size: 0.72rem;
+  gap: 8px;
+}
+.sig-log-row:last-child { border-bottom: none; }
+.sig-log-time { color: var(--muted); flex-shrink: 0; }
+.sig-log-dir  { font-weight: 700; flex-shrink: 0; }
+.sig-log-detail { color: var(--muted2); flex: 1; text-align: right; }
+
+/* Next signal countdown */
+.signal-next {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 16px;
+  background: var(--surface2);
+  border-top: 1px solid var(--border);
+  font-size: 0.72rem;
+  color: var(--muted2);
+}
+.signal-next strong { color: var(--text); }
+.notify-btn {
+  margin-left: auto;
+  padding: 4px 12px;
+  background: var(--accent);
+  border: none;
+  color: #fff;
+  border-radius: 6px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: opacity 0.2s;
+  font-family: 'Inter', sans-serif;
+}
+.notify-btn:hover { opacity: 0.85; }
+.notify-btn.enabled { background: #22c55e; }
+
+/* ── PROBABILITY SCORE ── */
+.prob-score-wrap {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+  background: var(--surface2);
+  border-radius: 10px;
+  padding: 10px 14px;
+  border: 1px solid var(--border2);
+}
+.prob-dial {
+  position: relative;
+  width: 72px;
+  height: 72px;
+  flex-shrink: 0;
+}
+.prob-dial svg { width: 100%; height: 100%; transform: rotate(-90deg); }
+.prob-dial-center {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.prob-num {
+  font-family: 'Inter', sans-serif;
+  font-size: 1.4rem;
+  font-weight: 800;
+  line-height: 1;
+}
+.prob-denom { font-size: 0.55rem; color: var(--muted); }
+.prob-info { flex: 1; }
+.prob-label {
+  font-size: 0.8rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+.prob-bar-track {
+  height: 8px;
+  background: var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  margin-bottom: 5px;
+}
+.prob-bar-fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.8s ease;
+}
+.prob-breakdown {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.prob-pill {
+  font-size: 0.62rem;
+  padding: 2px 7px;
+  border-radius: 10px;
+  border: 1px solid var(--border2);
+  color: var(--muted2);
+  background: var(--surface);
+}
+.prob-pill.pos { border-color: rgba(34,197,94,0.3);  color: #22c55e; background: rgba(34,197,94,0.07); }
+.prob-pill.neg { border-color: rgba(239,68,68,0.3);  color: #ef4444; background: rgba(239,68,68,0.07); }
+.prob-pill.neu { border-color: rgba(245,158,11,0.3); color: #f59e0b; background: rgba(245,158,11,0.07); }
+
+/* Threshold guide */
+.prob-guide {
+  display: flex;
+  gap: 6px;
+  font-size: 0.62rem;
+  color: var(--muted);
+  margin-top: 6px;
+  flex-wrap: wrap;
+}
+.prob-guide span { padding: 1px 6px; border-radius: 4px; }
+
 /* ── LOADING PULSE ── */
 .skeleton {
   background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%);
@@ -933,7 +1178,112 @@ body {
   </div>
 </div>
 
-<!-- ── ANNOUNCEMENTS ── -->
+<!-- ── OPTION SIGNAL ENGINE ── -->
+<div class="section-label">Intraday Option Signal Engine</div>
+<div class="signal-panel">
+
+  <div class="signal-header">
+    <div>
+      <div class="signal-title">📊 Option Buy Signal — Nifty 50</div>
+      <div style="font-size:0.68rem;color:var(--muted);margin-top:3px">Based on PCR · VIX · Advance/Decline · Nifty Spot · Momentum</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+      <div class="signal-expiry" id="sigExpiryLabel">Weekly Expiry: —</div>
+      <button class="notify-btn" id="notifyToggleBtn" onclick="toggleNotifications()">🔔 Enable Alerts</button>
+    </div>
+  </div>
+
+  <div class="signal-main">
+    <!-- Current Signal -->
+    <div id="sigCard" class="signal-card sideways">
+      <div class="sig-direction" id="sigDirection">⏳ Calculating...</div>
+      <div class="sig-subtitle" id="sigSubtitle">Waiting for market data</div>
+      <div id="sigConfBadge" class="sig-confidence conf-medium">● MEDIUM</div>
+
+      <!-- Probability Score -->
+      <div class="prob-score-wrap" id="probScoreWrap">
+        <div class="prob-dial">
+          <svg viewBox="0 0 72 72">
+            <circle cx="36" cy="36" r="28" fill="none" stroke="var(--border)" stroke-width="7"/>
+            <circle id="probArc" cx="36" cy="36" r="28" fill="none" stroke="#f59e0b"
+              stroke-width="7" stroke-linecap="round"
+              stroke-dasharray="176" stroke-dashoffset="176"/>
+          </svg>
+          <div class="prob-dial-center">
+            <div class="prob-num" id="probNum" style="color:#f59e0b">—</div>
+            <div class="prob-denom">/10</div>
+          </div>
+        </div>
+        <div class="prob-info">
+          <div class="prob-label" id="probLabel" style="color:#f59e0b">Calculating...</div>
+          <div class="prob-bar-track">
+            <div class="prob-bar-fill" id="probBar" style="width:0%;background:#f59e0b"></div>
+          </div>
+          <div class="prob-breakdown" id="probBreakdown"></div>
+          <div class="prob-guide">
+            <span style="background:rgba(239,68,68,0.1);color:#ef4444">1–3 Skip</span>
+            <span style="background:rgba(245,158,11,0.1);color:#f59e0b">4–5 Watch</span>
+            <span style="background:rgba(132,204,22,0.1);color:#84cc16">6–7 Consider</span>
+            <span style="background:rgba(34,197,94,0.1);color:#22c55e">8–10 High Prob</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="sig-strike-box">
+        <div class="sig-strike-label">Suggested Strike & Type</div>
+        <div class="sig-strike-val" id="sigStrike">—</div>
+      </div>
+
+      <div class="sig-targets" id="sigTargets">
+        <div class="sig-target"><div class="tgt-label">Target 1</div><div class="tgt-val" id="sigT1">—</div></div>
+        <div class="sig-target"><div class="tgt-label">Target 2</div><div class="tgt-val" id="sigT2">—</div></div>
+        <div class="sig-target"><div class="tgt-label">Target 3</div><div class="tgt-val" id="sigT3">—</div></div>
+      </div>
+
+      <div class="sig-sl" id="sigSL">🛑 Stop Loss: —</div>
+
+      <div class="sig-reason" id="sigReason">
+        Signal reasoning will appear here once market data is loaded.
+      </div>
+    </div>
+
+    <!-- Signal Inputs Dashboard -->
+    <div>
+      <div style="font-size:0.72rem;font-weight:700;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:10px">Signal Inputs</div>
+      <div id="sigInputs">
+        <div class="data-row"><span class="label">Nifty Spot</span><span class="val" id="si-spot">—</span></div>
+        <div class="data-row"><span class="label">Prev Close</span><span class="val" id="si-prev">—</span></div>
+        <div class="data-row"><span class="label">Day Change</span><span class="val" id="si-chg">—</span></div>
+        <div class="data-row"><span class="label">India VIX</span><span class="val" id="si-vix">—</span></div>
+        <div class="data-row"><span class="label">PCR</span><span class="val" id="si-pcr">—</span></div>
+        <div class="data-row"><span class="label">SMR Score</span><span class="val" id="si-smr">—</span></div>
+        <div class="data-row"><span class="label">A/D Ratio</span><span class="val" id="si-ad">—</span></div>
+        <div class="data-row"><span class="label">Breadth</span><span class="val" id="si-breadth">—</span></div>
+        <div class="data-row"><span class="label">ATM Strike</span><span class="val" id="si-atm">—</span></div>
+        <div class="data-row"><span class="label">Signal Time</span><span class="val" id="si-time">—</span></div>
+      </div>
+
+      <!-- Disclaimer -->
+      <div style="margin-top:12px;padding:8px 10px;background:rgba(245,158,11,0.06);border:1px solid rgba(245,158,11,0.2);border-radius:8px;font-size:0.68rem;color:var(--muted);line-height:1.6">
+        ⚠️ <strong style="color:var(--yellow)">Not financial advice.</strong> These are indicator-based nudges only. Always apply your own judgment. Options carry significant risk — never risk more than you can afford to lose. Use strict stop losses.
+      </div>
+    </div>
+  </div>
+
+  <div style="padding:10px 16px 4px;font-size:0.68rem;font-weight:700;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;border-top:1px solid var(--border)">Today's Signal Log</div>
+  <div class="signal-log" id="sigLog">
+    <div style="color:var(--muted);font-size:0.72rem;text-align:center;padding:8px">No signals yet today</div>
+  </div>
+
+  <!-- Next signal countdown -->
+  <div class="signal-next">
+    <span>Next signal check: <strong id="sigNextTime">—</strong></span>
+    <span style="color:var(--muted)">Signals fire at: 9:30 · 10:15 · 11:00 · 12:00 · 13:00 · 14:00 · 15:00 IST</span>
+  </div>
+
+</div>
+
+
 <div class="section-label">Important Announcements</div>
 <div class="grid-2">
   <div class="panel">
@@ -2018,6 +2368,514 @@ async function loadSectorHeatmap() {
   document.getElementById("sectorHeatmap").innerHTML = html;
 }
 
+/* ─── OPTION SIGNAL ENGINE ─── */
+const SIGNAL_TIMES = ["10:30","11:15","12:00","12:30","13:30","14:30"];
+
+// Signal window context — what each time means
+const SIGNAL_CONTEXT = {
+  "10:30": { label: "1st Signal",        note: "Market absorbed overnight gap & early volatility. First directional read." },
+  "11:15": { label: "2nd Signal",        note: "Confirm or reverse 10:30 signal. Trend should be establishing." },
+  "12:00": { label: "Europe Open Check", note: "⚡ European markets open ~12:00 IST. Reassess — sentiment can shift sharply." },
+  "12:30": { label: "Post-Europe",       note: "Europe flow absorbed. Confirm direction post-European open." },
+  "13:30": { label: "Afternoon Signal",  note: "US pre-market cues start building. Mid-session momentum check." },
+  "14:30": { label: "Last Signal",       note: "Last actionable signal. Avoid new entries after 14:45 — expiry risk." },
+};
+
+// Observation window message
+const OBS_WINDOW_END = "10:30";
+
+let signalLog = [];
+let notificationsEnabled = false;
+let lastSignalTime = null;
+let signalCheckInterval = null;
+
+// Smart expiry selector:
+// - On expiry day (Tuesday) → use NEXT Tuesday
+// - Any other day → use nearest upcoming Tuesday
+// - If Tuesday but before market open → still use next Tuesday (today's expiry)
+function getTargetExpiry() {
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  const day  = now.getDay(); // 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri,6=Sat
+  const mins = now.getHours() * 60 + now.getMinutes();
+  const isExpiryDay = day === 2; // Tuesday
+  const marketClosed = mins >= 930; // after 3:30 PM
+
+  let daysToAdd;
+  if (isExpiryDay) {
+    // On Tuesday: always suggest NEXT week's expiry (7 days ahead)
+    // because today's expiry has heavy theta decay — risky for buyers
+    daysToAdd = 7;
+  } else if (day < 2) {
+    // Sun(0) or Mon(1): this Tuesday
+    daysToAdd = 2 - day;
+  } else {
+    // Wed(3)–Sat(6): next Tuesday
+    daysToAdd = 9 - day;
+  }
+
+  const expiry = new Date(now);
+  expiry.setDate(now.getDate() + daysToAdd);
+
+  const daysToExpiry = daysToAdd;
+  const dateStr = expiry.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+
+  return { dateStr, daysToExpiry, isExpiryDay };
+}
+
+function getATM(spot) {
+  return Math.round(spot / 50) * 50;
+}
+
+// Market phase based on IST time
+function getMarketPhase() {
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  const m = now.getHours() * 60 + now.getMinutes();
+  if (m < 555)  return "pre";         // before 9:15
+  if (m < 630)  return "observation"; // 9:15–10:30 — watch & understand
+  if (m <= 870) return "active";      // 10:30–14:30 — signal window
+  if (m < 930)  return "caution";     // 14:30–15:30 — no new entries
+  return "closed";
+}
+
+function getNextSignalTime() {
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  const hhmm = now.getHours().toString().padStart(2,"0") + ":" + now.getMinutes().toString().padStart(2,"0");
+  const phase = getMarketPhase();
+  if (phase === "pre") return "10:30 IST (market opens 9:15, observation until 10:30)";
+  if (phase === "observation") {
+    const minLeft = 630 - (now.getHours() * 60 + now.getMinutes());
+    return `10:30 IST — 1st Signal (observation window: ${minLeft}m remaining)`;
+  }
+  if (phase === "caution") return "No more signals today — avoid new entries after 14:30";
+  if (phase === "closed")  return "10:30 IST tomorrow";
+  for (const t of SIGNAL_TIMES) {
+    if (t > hhmm) return `${t} IST — ${SIGNAL_CONTEXT[t]?.label || ""}`;
+  }
+  return "10:30 IST tomorrow";
+}
+
+function isSignalTime() {
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  const hhmm = now.getHours().toString().padStart(2,"0") + ":" + now.getMinutes().toString().padStart(2,"0");
+  return SIGNAL_TIMES.includes(hhmm) && hhmm !== lastSignalTime;
+}
+
+// Core signal logic
+function computeSignal({ spot, prevClose, vix, pcr, smr, adRatio, breadthPct }) {
+  const dayChgPct = ((spot - prevClose) / prevClose * 100);
+  const atm = getATM(spot);
+
+  // Score each indicator — positive = bullish, negative = bearish
+  let score = 0;
+  const reasons = [];
+
+  // 1. PCR
+  if (pcr >= 1.2) { score += 2; reasons.push(`PCR ${pcr.toFixed(2)} (high puts = bullish contrarian)`); }
+  else if (pcr >= 1.0) { score += 1; reasons.push(`PCR ${pcr.toFixed(2)} (slightly bullish)`); }
+  else if (pcr <= 0.8) { score -= 2; reasons.push(`PCR ${pcr.toFixed(2)} (high calls = bearish contrarian)`); }
+  else if (pcr < 1.0) { score -= 1; reasons.push(`PCR ${pcr.toFixed(2)} (slightly bearish)`); }
+
+  // 2. VIX
+  if (vix > 20) { score -= 1; reasons.push(`VIX ${vix.toFixed(1)} > 20 (high risk — reduce size)`); }
+  else if (vix > 16) { reasons.push(`VIX ${vix.toFixed(1)} elevated (caution)`); }
+  else if (vix < 12) { score += 1; reasons.push(`VIX ${vix.toFixed(1)} low (calm market)`); }
+  else { reasons.push(`VIX ${vix.toFixed(1)} normal range`); }
+
+  // 3. SMR
+  if (smr >= 60) { score += 2; reasons.push(`SMR ${smr} ≥ 60 (bounce signal)`); }
+  else if (smr <= 20) { score -= 2; reasons.push(`SMR ${smr} ≤ 20 (fall signal)`); }
+  else { reasons.push(`SMR ${smr} neutral zone`); }
+
+  // 4. Advance/Decline breadth
+  if (breadthPct >= 65) { score += 2; reasons.push(`Breadth ${breadthPct}% bullish (strong A/D)`); }
+  else if (breadthPct >= 55) { score += 1; reasons.push(`Breadth ${breadthPct}% mildly bullish`); }
+  else if (breadthPct <= 35) { score -= 2; reasons.push(`Breadth ${breadthPct}% bearish (weak A/D)`); }
+  else if (breadthPct <= 45) { score -= 1; reasons.push(`Breadth ${breadthPct}% mildly bearish`); }
+  else { reasons.push(`Breadth ${breadthPct}% neutral`); }
+
+  // 5. Nifty spot vs prev close
+  if (dayChgPct > 0.5) { score += 1; reasons.push(`Nifty up ${dayChgPct.toFixed(2)}% (positive momentum)`); }
+  else if (dayChgPct < -0.5) { score -= 1; reasons.push(`Nifty down ${Math.abs(dayChgPct).toFixed(2)}% (negative momentum)`); }
+  else { reasons.push(`Nifty flat (${dayChgPct.toFixed(2)}%)`); }
+
+  // Determine direction & confidence
+  let direction, type, confidence, confClass, cardClass, emoji;
+  const absScore = Math.abs(score);
+
+  if (score >= 4) { direction = "BUY CE"; type = "CE"; confidence = "HIGH"; confClass = "conf-high"; cardClass = "bullish"; emoji = "📈"; }
+  else if (score >= 2) { direction = "BUY CE"; type = "CE"; confidence = "MEDIUM"; confClass = "conf-medium"; cardClass = "bullish"; emoji = "📈"; }
+  else if (score <= -4) { direction = "BUY PE"; type = "PE"; confidence = "HIGH"; confClass = "conf-high"; cardClass = "bearish"; emoji = "📉"; }
+  else if (score <= -2) { direction = "BUY PE"; type = "PE"; confidence = "MEDIUM"; confClass = "conf-medium"; cardClass = "bearish"; emoji = "📉"; }
+  else { direction = "SIDEWAYS"; type = null; confidence = "LOW"; confClass = "conf-low"; cardClass = "sideways"; emoji = "⚠️"; }
+
+  // High VIX override
+  const highRisk = vix > 20;
+  if (highRisk) { cardClass = "danger"; confidence = confidence === "HIGH" ? "MEDIUM" : "LOW"; }
+
+  // ── EXPIRY & DTE — declared here so all blocks below can use them ──
+  const expiry = getTargetExpiry();
+  const dte    = expiry.daysToExpiry;
+
+  // ── SMART STRIKE SELECTOR ──
+  // Conditions to consider OTM:
+  //   • Score abs ≥ 4 (strong conviction)
+  //   • VIX < 20 (not spiking — OTM premiums are reasonable)
+  //   • DTE ≥ 3 (enough time for move to materialise)
+  const canConsiderOTM = Math.abs(score) >= 4 && vix < 20 && dte >= 3;
+  const strongConviction = Math.abs(score) >= 6;
+
+  // Strike selection grid:
+  // score ≥ 6 : PRIMARY = OTM +100, SECONDARY = OTM +50
+  // score 4–5 : PRIMARY = ATM or OTM +50 (both shown), user chooses
+  // score 2–3 : PRIMARY = ATM only
+  let primaryStrike, secondaryStrike, primaryLabel, secondaryLabel;
+
+  if (type === "CE") {
+    if (strongConviction && !highRisk) {
+      primaryStrike   = atm + 100; primaryLabel   = `OTM +100 (High R:R)`;
+      secondaryStrike = atm + 50;  secondaryLabel = `OTM +50 (Moderate R:R)`;
+    } else if (canConsiderOTM) {
+      primaryStrike   = atm;      primaryLabel   = `ATM (Safer)`;
+      secondaryStrike = atm + 50; secondaryLabel = `OTM +50 (if expecting strong rally)`;
+    } else {
+      primaryStrike   = atm;  primaryLabel   = `ATM (Recommended)`;
+      secondaryStrike = null;
+    }
+  } else if (type === "PE") {
+    if (strongConviction && !highRisk) {
+      primaryStrike   = atm - 100; primaryLabel   = `OTM -100 (High R:R)`;
+      secondaryStrike = atm - 50;  secondaryLabel = `OTM -50 (Moderate R:R)`;
+    } else if (canConsiderOTM) {
+      primaryStrike   = atm;       primaryLabel   = `ATM (Safer)`;
+      secondaryStrike = atm - 50;  secondaryLabel = `OTM -50 (if expecting sharp fall)`;
+    } else {
+      primaryStrike   = atm;  primaryLabel   = `ATM (Recommended)`;
+      secondaryStrike = null;
+    }
+  }
+
+  // Premium estimates — OTM premiums ~40–60% cheaper than ATM
+  const basePrem    = spot * 0.004;
+  const dteFactor   = Math.sqrt(Math.max(1, dte) / 5);
+  const atmPrem     = Math.max(30,  Math.round(basePrem * dteFactor / 5) * 5);
+  const otm50Prem   = Math.max(15,  Math.round(atmPrem  * 0.55 / 5) * 5);
+  const otm100Prem  = Math.max(10,  Math.round(atmPrem  * 0.30 / 5) * 5);
+
+  // Pick the right premium for primary strike
+  const strikeDiff  = type === "CE"
+    ? (primaryStrike - atm)
+    : (atm - primaryStrike);
+  const activePrem  = strikeDiff >= 100 ? otm100Prem : strikeDiff >= 50 ? otm50Prem : atmPrem;
+
+  // DTE strategy note
+  let dteNote = "";
+  if (dte <= 1)      dteNote = "⚠ Expiry day — ATM only, small size, strict SL";
+  else if (dte <= 3) dteNote = "Short DTE — quick move needed · prefer ATM";
+  else if (dte <= 5) dteNote = "Mid-week — good balance of risk/reward";
+  else               dteNote = "Early week — more time value, OTM viable";
+
+  // OTM rationale line
+  let otmRationale = "";
+  if (canConsiderOTM && type) {
+    const expected = type === "CE" ? "rally" : "fall";
+    if (strongConviction)
+      otmRationale = `💡 Strong conviction (score ${score}) → OTM suggested for better R:R if expecting sharp ${expected}`;
+    else
+      otmRationale = `💡 Moderate conviction → OTM is optional — only if you expect a strong ${expected}`;
+  }
+
+  // Build strikeName string (multi-line for rendering)
+  let strikeName, t1, t2, t3, sl;
+
+  if (type) {
+    const secLine = secondaryStrike
+      ? `\nAlt: ${secondaryStrike} ${type} · ${secondaryLabel}`
+      : "";
+    strikeName = [
+      `${primaryStrike} ${type} · ${primaryLabel}`,
+      `${expiry.isExpiryDay ? "⚡ Expiry Day → " : ""}Expiry: ${expiry.dateStr} · ${dte}d away`,
+      dteNote,
+      otmRationale,
+      secLine.trim()
+    ].filter(Boolean).join("\n");
+
+    t1 = `+${Math.round(activePrem * 0.5)} pts (~50%)`;
+    t2 = `+${Math.round(activePrem * 1.0)} pts (~100%)`;
+    t3 = `+${Math.round(activePrem * 1.8)} pts (~180%)`;
+    sl = `🛑 SL: –${Math.round(activePrem * 0.3)} pts (~30% of prem) · Est. premium ~₹${activePrem}`;
+  } else {
+    strikeName = "No trade recommended — wait for clearer signal";
+    t1 = "—"; t2 = "—"; t3 = "—";
+    sl = "🛑 Stay out — low conviction";
+  }
+
+  return { direction, type, confidence, confClass, cardClass, emoji, strikeName, t1, t2, t3, sl, reasons, score, highRisk, atm, expiry, primaryStrike, canConsiderOTM, strongConviction };
+}
+
+/* ─── PROBABILITY SCORE (0–10) ─── */
+function computeProbabilityScore(sig, inputs) {
+  // Each factor contributes up to 2 points → max raw = 10
+  // Then we map to 0–10 with penalties
+
+  let raw = 0;
+  const breakdown = []; // { label, pts, cls }
+
+  // 1. Raw signal score alignment (0–2 pts)
+  const absScore = Math.abs(sig.score);
+  const scorePts = Math.min(2, absScore / 4);
+  raw += scorePts;
+  breakdown.push({ label: `Signal ${absScore >= 4 ? "strong" : "weak"} (${sig.score > 0 ? "+" : ""}${sig.score})`, pts: scorePts, cls: scorePts >= 1.5 ? "pos" : scorePts >= 0.8 ? "neu" : "neg" });
+
+  // 2. PCR conviction (0–2 pts)
+  const pcrDist = Math.abs(inputs.pcr - 1.0);
+  const pcrPts  = Math.min(2, pcrDist / 0.25);
+  raw += pcrPts;
+  breakdown.push({ label: `PCR ${inputs.pcr.toFixed(2)}`, pts: pcrPts, cls: pcrDist >= 0.2 ? "pos" : pcrDist >= 0.1 ? "neu" : "neg" });
+
+  // 3. VIX environment (0–2 pts)
+  let vixPts;
+  if (inputs.vix < 12)       vixPts = 2.0;
+  else if (inputs.vix < 16)  vixPts = 1.5;
+  else if (inputs.vix < 20)  vixPts = 1.0;
+  else if (inputs.vix < 25)  vixPts = 0.5;
+  else                       vixPts = 0;
+  raw += vixPts;
+  breakdown.push({ label: `VIX ${inputs.vix.toFixed(1)}`, pts: vixPts, cls: vixPts >= 1.5 ? "pos" : vixPts >= 0.8 ? "neu" : "neg" });
+
+  // 4. A/D breadth alignment (0–2 pts)
+  const breadthAligned = (sig.type === "CE" && inputs.breadthPct >= 55) || (sig.type === "PE" && inputs.breadthPct <= 45);
+  const breadthPts = breadthAligned
+    ? Math.min(2, Math.abs(inputs.breadthPct - 50) / 12.5)
+    : 0;
+  raw += breadthPts;
+  breakdown.push({ label: `Breadth ${inputs.breadthPct}%`, pts: breadthPts, cls: breadthPts >= 1.5 ? "pos" : breadthPts >= 0.6 ? "neu" : "neg" });
+
+  // 5. SMR alignment (0–2 pts)
+  const smrAligned = (sig.type === "CE" && inputs.smr >= 50) || (sig.type === "PE" && inputs.smr <= 50);
+  const smrExtreme = inputs.smr >= 60 || inputs.smr <= 20;
+  const smrPts = smrAligned ? (smrExtreme ? 2.0 : 1.0) : 0;
+  raw += smrPts;
+  breakdown.push({ label: `SMR ${inputs.smr}`, pts: smrPts, cls: smrPts >= 1.5 ? "pos" : smrPts >= 0.8 ? "neu" : "neg" });
+
+  // Scale raw (0–10) to final score
+  let finalScore = Math.round(Math.min(10, raw));
+
+  // Penalties
+  if (sig.highRisk)           finalScore = Math.max(0, finalScore - 2); // VIX > 20
+  if (inputs.dte <= 1)        finalScore = Math.max(0, finalScore - 1); // expiry day
+  if (sig.direction === "SIDEWAYS") finalScore = Math.min(3, finalScore);
+
+  // Label
+  let label, color;
+  if (finalScore >= 8)      { label = "Very High Probability — Strong Setup";  color = "#22c55e"; }
+  else if (finalScore >= 6) { label = "Good Setup — Worth Considering";         color = "#84cc16"; }
+  else if (finalScore >= 4) { label = "Moderate — Watch Carefully";             color = "#f59e0b"; }
+  else if (finalScore >= 2) { label = "Weak Setup — Skip or Very Small Size";   color = "#f97316"; }
+  else                      { label = "Very Low — Do Not Trade";                color = "#ef4444"; }
+
+  return { score: finalScore, label, color, breakdown };
+}
+
+function renderProbabilityScore(prob) {
+  const circ = 176; // 2π × 28
+  const offset = circ - (prob.score / 10) * circ;
+
+  document.getElementById("probArc").style.strokeDashoffset = offset;
+  document.getElementById("probArc").style.stroke = prob.color;
+  document.getElementById("probNum").textContent  = prob.score;
+  document.getElementById("probNum").style.color  = prob.color;
+  document.getElementById("probLabel").textContent = prob.label;
+  document.getElementById("probLabel").style.color = prob.color;
+  document.getElementById("probBar").style.width   = (prob.score * 10) + "%";
+  document.getElementById("probBar").style.background = prob.color;
+
+  // Breakdown pills
+  document.getElementById("probBreakdown").innerHTML = prob.breakdown.map(b =>
+    `<span class="prob-pill ${b.cls}">${b.label} +${b.pts.toFixed(1)}</span>`
+  ).join("");
+}
+
+function renderSignal(sig, inputs) {
+  const card = document.getElementById("sigCard");
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+
+  // Probability score
+  const prob = computeProbabilityScore(sig, { ...inputs, dte: sig.expiry?.daysToExpiry || 5 });
+  renderProbabilityScore(prob);
+  sig.prob = prob; // attach for log
+
+  // Card style
+  card.className = "signal-card " + sig.cardClass;
+
+  document.getElementById("sigDirection").textContent   = sig.emoji + " " + sig.direction;
+  document.getElementById("sigDirection").style.color   = sig.type === "CE" ? "#22c55e" : sig.type === "PE" ? "#ef4444" : "#f59e0b";
+  document.getElementById("sigSubtitle").textContent    = sig.highRisk ? "⚠ HIGH VIX — reduce position size significantly" : `Signal generated at ${timeStr}`;
+  document.getElementById("sigConfBadge").textContent   = "● " + sig.confidence + " CONFIDENCE";
+  document.getElementById("sigConfBadge").className     = "sig-confidence " + sig.confClass;
+
+  // Render strike with line breaks and DTE badge
+  const lines = sig.strikeName.split("\n");
+  const dteColor = sig.expiry?.daysToExpiry <= 1 ? "#ef4444" : sig.expiry?.daysToExpiry <= 3 ? "#f59e0b" : "#22c55e";
+  document.getElementById("sigStrike").innerHTML = lines.map((l, i) => {
+    if (i === 0) return `<span style="font-size:1.1rem;font-weight:700">${l}</span>`;
+    if (l.includes("Expiry:") || l.includes("expiry")) return `<span style="font-size:0.72rem;color:${dteColor};font-weight:600">${l}</span>`;
+    if (l.includes("Expiry day") || l.includes("⚡")) return `<span style="font-size:0.72rem;color:#ef4444;font-weight:700">${l}</span>`;
+    if (l.includes("Alt:")) return `<span style="font-size:0.68rem;color:var(--muted)">${l}</span>`;
+    if (l.includes("💡")) return `<span style="font-size:0.7rem;color:var(--accent2)">${l}</span>`;
+    return `<span style="font-size:0.7rem;color:var(--muted2)">${l}</span>`;
+  }).join("<br>");
+
+  document.getElementById("sigT1").textContent = sig.t1;
+  document.getElementById("sigT2").textContent = sig.t2;
+  document.getElementById("sigT3").textContent = sig.t3;
+  document.getElementById("sigT1").style.color = "#84cc16";
+  document.getElementById("sigT2").style.color = "#22c55e";
+  document.getElementById("sigT3").style.color = "#22c55e";
+  document.getElementById("sigSL").textContent = sig.sl;
+  document.getElementById("sigReason").innerHTML = "<strong>Why:</strong> " + sig.reasons.map(r => `<span style='color:var(--muted2)'>• ${r}</span>`).join(" ");
+
+  // Update signal inputs panel
+  const chgColor = inputs.dayChg >= 0 ? "#22c55e" : "#ef4444";
+  document.getElementById("si-spot").textContent    = "₹" + inputs.spot.toFixed(2);
+  document.getElementById("si-prev").textContent    = "₹" + inputs.prevClose.toFixed(2);
+  document.getElementById("si-chg").innerHTML       = `<span style="color:${chgColor}">${inputs.dayChg >= 0 ? "▲" : "▼"} ${Math.abs(inputs.dayChg).toFixed(2)} (${Math.abs(inputs.dayChgPct).toFixed(2)}%)</span>`;
+  document.getElementById("si-vix").textContent     = inputs.vix.toFixed(2);
+  document.getElementById("si-vix").style.color     = inputs.vix > 20 ? "#ef4444" : inputs.vix > 16 ? "#f59e0b" : "#22c55e";
+  document.getElementById("si-pcr").textContent     = inputs.pcr.toFixed(2);
+  document.getElementById("si-smr").textContent     = inputs.smr + " / 100";
+  document.getElementById("si-smr").style.color     = inputs.smr >= 60 ? "#22c55e" : inputs.smr <= 20 ? "#ef4444" : "#f59e0b";
+  document.getElementById("si-ad").textContent      = inputs.adRatio;
+  document.getElementById("si-breadth").textContent = inputs.breadthPct + "% bullish";
+  document.getElementById("si-breadth").style.color = inputs.breadthPct >= 60 ? "#22c55e" : inputs.breadthPct <= 40 ? "#ef4444" : "#f59e0b";
+  document.getElementById("si-atm").textContent     = sig.atm + " (ATM)";
+  document.getElementById("si-time").textContent    = timeStr;
+
+  // Log it
+  if (sig.direction !== "SIDEWAYS") {
+    addSignalLog(timeStr, sig, inputs);
+    if (notificationsEnabled) fireNotification(sig, timeStr, prob);
+    playSignalSound(sig.type);
+  }
+
+  document.getElementById("sigNextTime").textContent = getNextSignalTime();
+}
+
+function addSignalLog(time, sig, inputs) {
+  const logEl = document.getElementById("sigLog");
+  const dirColor = sig.type === "CE" ? "#22c55e" : sig.type === "PE" ? "#ef4444" : "#f59e0b";
+  const probColor = sig.prob?.color || "#f59e0b";
+  const row = document.createElement("div");
+  row.className = "sig-log-row";
+  row.innerHTML = `
+    <span class="sig-log-time">${time}</span>
+    <span class="sig-log-dir" style="color:${dirColor}">${sig.emoji} ${sig.direction}</span>
+    <span style="color:${probColor};font-weight:700;font-size:0.75rem">${sig.prob?.score ?? "—"}/10</span>
+    <span style="color:var(--muted2);font-size:0.68rem">${sig.confidence}</span>
+    <span class="sig-log-detail">${sig.primaryStrike ?? sig.atm} ${sig.type ?? ""} · VIX ${inputs.vix.toFixed(1)} · PCR ${inputs.pcr.toFixed(2)}</span>`;
+  if (logEl.querySelector("[style*='No signals']")) logEl.innerHTML = "";
+  logEl.insertBefore(row, logEl.firstChild);
+}
+
+function fireNotification(sig, time, prob) {
+  if (!("Notification" in window) || Notification.permission !== "granted") return;
+  const title = `${sig.emoji} ${sig.direction} — Score ${prob?.score ?? "?"}/10`;
+  const body  = `${prob?.label ?? sig.confidence} · Strike: ${sig.primaryStrike ?? sig.atm} ${sig.type ?? ""} · ${time}\n${sig.strikeName.split("\n")[0]}`;
+  new Notification(title, { body, icon: "https://cdn-icons-png.flaticon.com/512/2534/2534461.png" });
+}
+
+function playSignalSound(type) {
+  try {
+    const ctx = new (window.AudioContext || window.webkitAudioContext)();
+    const freqs = type === "CE" ? [523, 659, 784] : type === "PE" ? [784, 659, 523] : [523];
+    freqs.forEach((freq, i) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain); gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = "sine";
+      gain.gain.setValueAtTime(0.3, ctx.currentTime + i * 0.15);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.15 + 0.3);
+      osc.start(ctx.currentTime + i * 0.15);
+      osc.stop(ctx.currentTime + i * 0.15 + 0.3);
+    });
+  } catch {}
+}
+
+async function toggleNotifications() {
+  const btn = document.getElementById("notifyToggleBtn");
+  if (!notificationsEnabled) {
+    if ("Notification" in window) {
+      const perm = await Notification.requestPermission();
+      if (perm === "granted") {
+        notificationsEnabled = true;
+        btn.textContent = "🔔 Alerts ON";
+        btn.classList.add("enabled");
+        new Notification("✅ Nifty Signal Alerts Enabled", { body: "You'll be notified at each signal time during market hours." });
+      } else {
+        btn.textContent = "❌ Permission Denied";
+      }
+    }
+  } else {
+    notificationsEnabled = false;
+    btn.textContent = "🔔 Enable Alerts";
+    btn.classList.remove("enabled");
+  }
+}
+
+// Main signal runner — gathers all live data and computes signal
+async function runSignalEngine(force = false) {
+  if (!force && !isSignalTime()) return;
+
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  const hhmm = now.getHours().toString().padStart(2,"0") + ":" + now.getMinutes().toString().padStart(2,"0");
+  lastSignalTime = hhmm;
+
+  // Gather inputs from already-loaded data on page
+  try {
+    const spotText  = document.getElementById("price")?.textContent?.replace("₹","").replace(",","");
+    const spot      = parseFloat(spotText) || 0;
+    const pcrText   = document.getElementById("pcrValue")?.textContent;
+    const pcr       = parseFloat(pcrText) || 1.0;
+    const smrText   = document.getElementById("si-smr")?.textContent || "50";
+    const smr       = parseInt(smrText) || 50;
+    const vixText   = document.getElementById("idx-vix")?.textContent;
+    const vix       = parseFloat(vixText) || 15;
+    const adRatioTx = document.getElementById("adRatio")?.textContent || "1.0";
+    const adRatio   = parseFloat(adRatioTx) || 1.0;
+    const breadthTx = document.getElementById("adBreadth")?.textContent || "50%";
+    const breadthPct= parseInt(breadthTx) || 50;
+
+    // Get prevClose via fresh fetch
+    let prevClose = spot; // fallback
+    try {
+      const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI"));
+      const d = await r.json();
+      prevClose = d.chart.result[0].meta.previousClose;
+    } catch {}
+
+    const dayChg    = spot - prevClose;
+    const dayChgPct = prevClose > 0 ? (dayChg / prevClose * 100) : 0;
+
+    const inputs = { spot, prevClose, dayChg, dayChgPct, vix, pcr, smr, adRatio, breadthPct };
+    const sig = computeSignal(inputs);
+    renderSignal(sig, inputs);
+
+  } catch(e) { console.error("Signal engine error:", e); }
+}
+
+// Init signal panel
+function initSignalEngine() {
+  const expiry = getTargetExpiry();
+  const label  = expiry.isExpiryDay
+    ? `⚡ Expiry Day → Next Week: ${expiry.dateStr}`
+    : `Weekly Expiry: ${expiry.dateStr} (${expiry.daysToExpiry}d)`;
+  document.getElementById("sigExpiryLabel").textContent = label;
+  document.getElementById("sigNextTime").textContent = getNextSignalTime();
+  signalCheckInterval = setInterval(runSignalEngine, 60000);
+  setTimeout(() => runSignalEngine(true), 5000);
+}
+
 updateClock();
 updateRefreshIndicator();
 startCountdown();
@@ -2034,6 +2892,7 @@ load52Week();
 loadAnnouncements();
 loadFIIDII();
 loadSectorHeatmap();
+initSignalEngine();
 
 fetchRSS("https://timesofindia.indiatimes.com/rssfeeds/1898055.cms", "toi");
 fetchRSS("https://www.livemint.com/rss/markets", "livemint");
@@ -2053,6 +2912,7 @@ setInterval(load52Week, 300000);
 setInterval(loadAnnouncements, 600000);
 setInterval(loadFIIDII, 300000);
 setInterval(loadSectorHeatmap, 60000);
+
 
 
 

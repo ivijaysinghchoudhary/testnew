@@ -6,7 +6,7 @@
 
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Choudhary GITHUB</title>
+<title>Nifty Market Dashboard</title>
 
 <style>
 
@@ -158,18 +158,19 @@ color:#94a3b8;
 
 <h3>Nifty Live Chart</h3>
 
-<script src="https://s3.tradingview.com/tv.js"></script>
+<!--div id="tv_chart"></div-->
 
+<script src="https://s3.tradingview.com/tv.js"></script>
 <script>
 new TradingView.widget({
-autosize:true,
-symbol:"NSE:NIFTY",
-interval:"5",
-timezone:"Asia/Kolkata",
-theme:"dark",
-style:"1",
-locale:"en",
-container_id:"tv_chart"
+  autosize:true,
+  symbol:"NSE:NIFTY",
+  interval:"5",
+  timezone:"Asia/Kolkata",
+  theme:"dark",
+  style:"1",
+  locale:"en",
+  container_id:"tv_chart"
 });
 </script>
 
@@ -198,7 +199,7 @@ container_id:"tv_chart"
 <div class="news-grid">
 
 <div class="news-column" id="toi">
-<h3>Times of India</h3>
+<h3>TOI</h3>
 <div class="content">Loading...</div>
 </div>
 

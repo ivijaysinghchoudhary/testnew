@@ -1,0 +1,152 @@
+name: PCR Data Collector
+
+on:
+  schedule:
+    # Runs every 15 min, Mon–Fri, 03:45–10:15 UTC = 09:15–15:45 IST
+    - cron: '45 3 * * 1-5'
+    - cron: '0 4 * * 1-5'
+    - cron: '15 4 * * 1-5'
+    - cron: '30 4 * * 1-5'
+    - cron: '45 4 * * 1-5'
+    - cron: '0 5 * * 1-5'
+    - cron: '15 5 * * 1-5'
+    - cron: '30 5 * * 1-5'
+    - cron: '45 5 * * 1-5'
+    - cron: '0 6 * * 1-5'
+    - cron: '15 6 * * 1-5'
+    - cron: '30 6 * * 1-5'
+    - cron: '45 6 * * 1-5'
+    - cron: '0 7 * * 1-5'
+    - cron: '15 7 * * 1-5'
+    - cron: '30 7 * * 1-5'
+    - cron: '45 7 * * 1-5'
+    - cron: '0 8 * * 1-5'
+    - cron: '15 8 * * 1-5'
+    - cron: '30 8 * * 1-5'
+    - cron: '45 8 * * 1-5'
+    - cron: '0 9 * * 1-5'
+    - cron: '15 9 * * 1-5'
+    - cron: '30 9 * * 1-5'
+    - cron: '15 10 * * 1-5'
+
+  workflow_dispatch:  # Allow manual trigger anytime
+
+jobs:
+  collect-pcr:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Fetch VIX & Calculate PCR
+        id: pcr
+        run: |
+          # Fetch India VIX from Yahoo Finance
+          RESPONSE=$(curl -s "https://query1.finance.yahoo.com/v8/finance/chart/INDIAVIX.NS" \
+            -H "User-Agent: Mozilla/5.0")
+
+          # Extract regularMarketPrice
+          VIX=$(echo "$RESPONSE" | python3 -c "
+          import sys, json
+          try:
+              d = json.load(sys.stdin)
+              print(d['chart']['result'][0]['meta']['regularMarketPrice'])
+          except:
+              print('0')
+          ")
+
+          echo "VIX: $VIX"
+
+          # Calculate PCR and SMR using Python
+          python3 << 'PYEOF'
+          import json, os
+          from datetime import datetime, timezone, timedelta
+
+          IST = timezone(timedelta(hours=5, minutes=30))
+          now_ist = datetime.now(IST)
+
+          vix = float(os.environ.get('VIX_VAL', '15'))
+
+          # PCR derived from VIX (same formula as dashboard)
+          pcr = max(0.6, min(1.5, 1.0 + (20 - vix) / 40))
+          pcr = round(pcr, 2)
+
+          # SMR: map PCR 0.5–1.5 → 0–100
+          smr = round(min(100, max(0, (pcr - 0.5) / 1.0 * 100)))
+
+          time_str = now_ist.strftime("%H:%M")
+          date_str = now_ist.strftime("%Y-%m-%d")
+
+          print(f"PCR={pcr} SMR={smr} TIME={time_str} DATE={date_str}")
+
+          # Write to env file for next step
+          with open(os.environ['GITHUB_ENV'], 'a') as f:
+              f.write(f"PCR_VAL={pcr}\n")
+              f.write(f"SMR_VAL={smr}\n")
+              f.write(f"TIME_STR={time_str}\n")
+              f.write(f"DATE_STR={date_str}\n")
+          PYEOF
+        env:
+          VIX_VAL: ${{ steps.pcr.outputs.vix }}
+
+      - name: Update PCR JSON file
+        run: |
+          python3 << 'PYEOF'
+          import json, os
+          from pathlib import Path
+
+          pcr      = float(os.environ['PCR_VAL'])
+          smr      = int(os.environ['SMR_VAL'])
+          time_str = os.environ['TIME_STR']
+          date_str = os.environ['DATE_STR']
+
+          filepath = Path('pcr_data.json')
+
+          # Load existing data or start fresh
+          if filepath.exists():
+              try:
+                  stored = json.loads(filepath.read_text())
+              except:
+                  stored = {}
+          else:
+              stored = {}
+
+          # Reset if new day
+          if stored.get('date') != date_str:
+              stored = {'date': date_str, 'points': []}
+
+          # Avoid duplicate timestamps
+          existing_times = [p['time'] for p in stored.get('points', [])]
+          if time_str in existing_times:
+              print(f"Skipping duplicate timestamp {time_str}")
+          else:
+              stored['points'].append({
+                  'time': time_str,
+                  'pcr':  pcr,
+                  'smr':  smr
+              })
+              # Keep max 26 points
+              if len(stored['points']) > 26:
+                  stored['points'] = stored['points'][-26:]
+
+              filepath.write_text(json.dumps(stored, indent=2))
+              print(f"✓ Saved PCR={pcr} SMR={smr} at {time_str} for {date_str}")
+              print(f"Total points today: {len(stored['points'])}")
+          PYEOF
+        env:
+          PCR_VAL: ${{ env.PCR_VAL }}
+          SMR_VAL: ${{ env.SMR_VAL }}
+          TIME_STR: ${{ env.TIME_STR }}
+          DATE_STR: ${{ env.DATE_STR }}
+
+      - name: Commit & push PCR data
+        run: |
+          git config user.name  "PCR Bot"
+          git config user.email "pcr-bot@dashboard"
+          git add pcr_data.json
+          # Only commit if there are changes
+          git diff --staged --quiet || git commit -m "PCR update ${{ env.DATE_STR }} ${{ env.TIME_STR }} | PCR=${{ env.PCR_VAL }} SMR=${{ env.SMR_VAL }}"
+          git push
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

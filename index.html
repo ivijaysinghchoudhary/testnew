@@ -1234,6 +1234,21 @@ body {
         <div class="sig-strike-val" id="sigStrike">—</div>
       </div>
 
+      <!-- Entry Price Box -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:10px">
+        <div style="background:rgba(59,130,246,0.08);border:1px solid rgba(59,130,246,0.25);border-radius:8px;padding:10px 12px">
+          <div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">📌 Entry Price (est.)</div>
+          <div id="sigEntryPrice" style="font-size:1.2rem;font-weight:800;color:var(--accent)">—</div>
+          <div id="sigEntryRange" style="font-size:0.65rem;color:var(--muted2);margin-top:2px">Range: — to —</div>
+        </div>
+        <div style="background:rgba(239,68,68,0.07);border:1px solid rgba(239,68,68,0.2);border-radius:8px;padding:10px 12px">
+          <div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em;margin-bottom:3px">🛑 Exit at SL</div>
+          <div id="sigExitPrice" style="font-size:1.2rem;font-weight:800;color:#ef4444">—</div>
+          <div id="sigExitNote" style="font-size:0.65rem;color:var(--muted2);margin-top:2px">30% of premium</div>
+        </div>
+      </div>
+      <div id="sigEntryNote" style="font-size:0.68rem;color:var(--muted);padding:5px 8px;background:var(--surface2);border-radius:6px;margin-bottom:10px;line-height:1.5"></div>
+
       <div class="sig-targets" id="sigTargets">
         <div class="sig-target"><div class="tgt-label">Target 1</div><div class="tgt-val" id="sigT1">—</div></div>
         <div class="sig-target"><div class="tgt-label">Target 2</div><div class="tgt-val" id="sigT2">—</div></div>
@@ -1565,6 +1580,7 @@ function toggleTickerAuto() {
   tickerAutoPlay = !tickerAutoPlay;
   const btn = document.getElementById("tickerPlayBtn");
   if (tickerAutoPlay) {
+    clearInterval(tickerAutoInterval);
     tickerAutoInterval = setInterval(tickerNext, 4000);
     if (btn) { btn.textContent = "⏸"; btn.style.color = "var(--accent)"; }
   } else {
@@ -2613,6 +2629,53 @@ function computeSignal({ spot, prevClose, vix, pcr, smr, adRatio, breadthPct }) 
 }
 
 /* ─── PROBABILITY SCORE (0–10) ─── */
+/* ─── BLACK-SCHOLES OPTION PRICING ─── */
+// Standard normal CDF approximation
+function normCDF(x) {
+  const a1=0.254829592, a2=-0.284496736, a3=1.421413741, a4=-1.453152027, a5=1.061405429, p=0.3275911;
+  const sign = x < 0 ? -1 : 1;
+  x = Math.abs(x) / Math.sqrt(2);
+  const t = 1.0 / (1.0 + p * x);
+  const y = 1.0 - (((((a5*t + a4)*t) + a3)*t + a2)*t + a1)*t * Math.exp(-x*x);
+  return 0.5 * (1.0 + sign * y);
+}
+
+function blackScholes(S, K, T, r, sigma, type) {
+  // S = spot, K = strike, T = time in years, r = risk-free rate, sigma = volatility (as decimal)
+  if (T <= 0) return Math.max(0, type === "CE" ? S - K : K - S);
+  const d1 = (Math.log(S / K) + (r + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
+  const d2 = d1 - sigma * Math.sqrt(T);
+  if (type === "CE") return S * normCDF(d1)  - K * Math.exp(-r * T) * normCDF(d2);
+  else               return K * Math.exp(-r * T) * normCDF(-d2) - S * normCDF(-d1);
+}
+
+function calcOptionEntry(spot, strike, type, dte, vix) {
+  // Inputs
+  const S     = spot;
+  const K     = strike;
+  const T     = Math.max(0.5/252, dte / 252); // trading days to years (min 0.5 day)
+  const r     = 0.065;   // India risk-free rate ~6.5%
+  const sigma = vix / 100; // VIX as annualised volatility decimal
+
+  const fairValue = blackScholes(S, K, T, r, sigma, type);
+
+  // Add bid-ask spread (Nifty options typically ₹1–5 spread at ATM)
+  const spread = Math.max(1, Math.round(fairValue * 0.02)); // ~2% spread
+  const entryLow  = Math.max(1,  Math.round((fairValue - spread/2) / 0.5) * 0.5);
+  const entryHigh = Math.round((fairValue + spread/2) / 0.5) * 0.5;
+  const entryMid  = Math.round(fairValue / 0.5) * 0.5;
+
+  // Exit at SL = 30% of entry (option buyer's rule)
+  const slPrice   = Math.max(1, Math.round(entryMid * 0.70 / 0.5) * 0.5); // exit when 30% gone
+
+  // Targets based on premium multiples
+  const t1Price   = Math.round(entryMid * 1.5  / 0.5) * 0.5;
+  const t2Price   = Math.round(entryMid * 2.0  / 0.5) * 0.5;
+  const t3Price   = Math.round(entryMid * 2.8  / 0.5) * 0.5;
+
+  return { fairValue: fairValue.toFixed(2), entryMid, entryLow, entryHigh, slPrice, t1Price, t2Price, t3Price, spread };
+}
+
 function computeProbabilityScore(sig, inputs) {
   // Each factor contributes up to 2 points → max raw = 10
   // Then we map to 0–10 with penalties
@@ -2703,7 +2766,38 @@ function renderSignal(sig, inputs) {
   // Probability score
   const prob = computeProbabilityScore(sig, { ...inputs, dte: sig.expiry?.daysToExpiry || 5 });
   renderProbabilityScore(prob);
-  sig.prob = prob; // attach for log
+  sig.prob = prob;
+
+  // Entry price via Black-Scholes
+  if (sig.type && sig.primaryStrike) {
+    const ep = calcOptionEntry(inputs.spot, sig.primaryStrike, sig.type, sig.expiry?.daysToExpiry || 5, inputs.vix);
+    document.getElementById("sigEntryPrice").textContent  = `₹${ep.entryMid}`;
+    document.getElementById("sigEntryRange").textContent  = `Range: ₹${ep.entryLow} – ₹${ep.entryHigh}`;
+    document.getElementById("sigExitPrice").textContent   = `₹${ep.slPrice}`;
+    document.getElementById("sigExitNote").textContent    = `Exit if falls to ₹${ep.slPrice} (–30%)`;
+    document.getElementById("sigEntryNote").innerHTML     =
+      `<strong style="color:var(--text)">Entry guide:</strong> Enter between ₹${ep.entryLow}–₹${ep.entryHigh} · ` +
+      `Fair value ~₹${ep.fairValue} (Black-Scholes, VIX ${inputs.vix.toFixed(1)}) · ` +
+      `Do not chase if premium &gt; ₹${Math.round(ep.entryHigh * 1.1)} — wait for pullback`;
+
+    // Update targets to show actual exit prices
+    document.getElementById("sigT1").textContent = `₹${ep.t1Price} (~+50%)`;
+    document.getElementById("sigT2").textContent = `₹${ep.t2Price} (~+100%)`;
+    document.getElementById("sigT3").textContent = `₹${ep.t3Price} (~+180%)`;
+    document.getElementById("sigT1").style.color = "#84cc16";
+    document.getElementById("sigT2").style.color = "#22c55e";
+    document.getElementById("sigT3").style.color = "#22c55e";
+    document.getElementById("sigSL").textContent = `🛑 SL: Exit at ₹${ep.slPrice} · Entry ~₹${ep.entryMid} · Max loss ~₹${Math.round((ep.entryMid - ep.slPrice) * 25)} per lot (25 qty)`;
+  } else {
+    ["sigEntryPrice","sigEntryRange","sigExitPrice","sigExitNote","sigEntryNote"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = id === "sigEntryPrice" || id === "sigExitPrice" ? "N/A" : "No trade";
+    });
+    document.getElementById("sigT1").textContent = sig.t1;
+    document.getElementById("sigT2").textContent = sig.t2;
+    document.getElementById("sigT3").textContent = sig.t3;
+    document.getElementById("sigSL").textContent = sig.sl;
+  }
 
   // Card style
   card.className = "signal-card " + sig.cardClass;
@@ -2726,13 +2820,6 @@ function renderSignal(sig, inputs) {
     return `<span style="font-size:0.7rem;color:var(--muted2)">${l}</span>`;
   }).join("<br>");
 
-  document.getElementById("sigT1").textContent = sig.t1;
-  document.getElementById("sigT2").textContent = sig.t2;
-  document.getElementById("sigT3").textContent = sig.t3;
-  document.getElementById("sigT1").style.color = "#84cc16";
-  document.getElementById("sigT2").style.color = "#22c55e";
-  document.getElementById("sigT3").style.color = "#22c55e";
-  document.getElementById("sigSL").textContent = sig.sl;
   document.getElementById("sigReason").innerHTML = "<strong>Why:</strong> " + sig.reasons.map(r => `<span style='color:var(--muted2)'>• ${r}</span>`).join(" ");
 
   // Update signal inputs panel

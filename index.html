@@ -4,15 +4,16 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Choudhary GITHUB – Market Dashboard</title>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700&family=Syne:wght@400;600;700;800&display=swap" rel="stylesheet">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
 <style>
 
 :root {
-  --bg: #080e1a;
-  --surface: #0f1829;
-  --surface2: #162035;
-  --border: #1e2d47;
-  --border2: #243552;
+  --bg: #1f1f1f;
+  --surface: #2a2a2a;
+  --surface2: #333333;
+  --border: #3d3d3d;
+  --border2: #484848;
   --accent: #3b82f6;
   --accent2: #0ea5e9;
   --green: #22c55e;
@@ -21,20 +22,20 @@
   --text: #e2e8f0;
   --muted: #64748b;
   --muted2: #94a3b8;
-  --font-mono: 'JetBrains Mono', monospace;
-  --font-display: 'Syne', sans-serif;
+  --font-mono: 'Inter', sans-serif;
+  --font-display: 'Inter', sans-serif;
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
 
 body {
-  font-family: var(--font-mono);
+  font-family: 'Inter', sans-serif;
   background: var(--bg);
   color: var(--text);
   padding: 16px;
   min-height: 100vh;
-  background-image: radial-gradient(ellipse at 20% 0%, #0c1f3f 0%, transparent 60%),
-                    radial-gradient(ellipse at 80% 0%, #0a1628 0%, transparent 50%);
+  background-image: radial-gradient(ellipse at 20% 0%, #2c2c2c 0%, transparent 60%),
+                    radial-gradient(ellipse at 80% 0%, #252525 0%, transparent 50%);
 }
 
 /* ── HEADER ── */
@@ -453,6 +454,150 @@ body {
   background: var(--surface2);
 }
 
+/* ── CHART BUTTONS ── */
+.chart-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--muted2);
+  padding: 4px 14px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+.chart-btn:hover { border-color: var(--accent); color: var(--accent); }
+.chart-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+
+/* ── AUTO-REFRESH INDICATOR ── */
+.refresh-bar {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 14px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.72rem;
+  color: var(--muted2);
+  margin-bottom: 14px;
+  flex-wrap: wrap;
+}
+.refresh-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: var(--green);
+  animation: pulse-dot 2s ease-in-out infinite;
+  flex-shrink: 0;
+}
+@keyframes pulse-dot {
+  0%,100% { opacity: 1; transform: scale(1); }
+  50%      { opacity: 0.4; transform: scale(0.7); }
+}
+.refresh-item { display: flex; align-items: center; gap: 5px; }
+.refresh-item span { color: var(--text); font-weight: 600; }
+.refresh-sep { color: var(--border2); }
+
+/* ── TABS ── */
+.tab-bar {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 12px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
+}
+.tab-btn {
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  color: var(--muted);
+  font-family: 'Inter', sans-serif;
+  font-size: 0.75rem;
+  font-weight: 600;
+  padding: 6px 14px;
+  cursor: pointer;
+  transition: all 0.15s;
+  margin-bottom: -1px;
+  letter-spacing: 0.04em;
+}
+.tab-btn:hover { color: var(--text); }
+.tab-btn.active { color: var(--accent); border-bottom-color: var(--accent); }
+.tab-pane { display: none; }
+.tab-pane.active { display: block; }
+
+/* ── FII/DII TABLE ── */
+.fiidii-table { width: 100%; border-collapse: collapse; font-size: 0.78rem; }
+.fiidii-table th {
+  text-align: right;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  padding: 0 8px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.fiidii-table th:first-child { text-align: left; }
+.fiidii-table td {
+  padding: 7px 8px;
+  border-bottom: 1px solid var(--border);
+  text-align: right;
+}
+.fiidii-table td:first-child { text-align: left; color: var(--muted2); font-size: 0.73rem; }
+.fiidii-table tr:last-child td { border-bottom: none; }
+.fiidii-net-pos { color: var(--green); font-weight: 700; }
+.fiidii-net-neg { color: var(--red); font-weight: 700; }
+.fiidii-summary {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 12px;
+  flex-wrap: wrap;
+}
+.fiidii-card {
+  flex: 1;
+  min-width: 100px;
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  border-radius: 8px;
+  padding: 10px 12px;
+  text-align: center;
+}
+.fiidii-card .fc-label { font-size: 0.65rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 4px; }
+.fiidii-card .fc-val { font-size: 1.05rem; font-weight: 700; }
+
+/* ── SECTOR HEATMAP ── */
+.heatmap-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+@media (max-width: 768px) { .heatmap-grid { grid-template-columns: repeat(2, 1fr); } }
+.hm-cell {
+  border-radius: 8px;
+  padding: 12px 10px;
+  text-align: center;
+  cursor: default;
+  transition: transform 0.15s, opacity 0.15s;
+  position: relative;
+  overflow: hidden;
+}
+.hm-cell:hover { transform: scale(1.03); opacity: 0.95; }
+.hm-name {
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255,255,255,0.85);
+  margin-bottom: 6px;
+}
+.hm-pct {
+  font-size: 1.1rem;
+  font-weight: 800;
+  color: #fff;
+}
+.hm-price { font-size: 0.68rem; color: rgba(255,255,255,0.65); margin-top: 3px; }
+
 /* ── LOADING PULSE ── */
 .skeleton {
   background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%);
@@ -484,6 +629,18 @@ body {
 <!-- ── TICKER ── -->
 <div class="ticker-wrapper">
   <div id="ticker" class="ticker">Loading top stocks...</div>
+</div>
+
+<!-- ── AUTO-REFRESH INDICATOR ── -->
+<div class="refresh-bar">
+  <div class="refresh-dot"></div>
+  <div class="refresh-item">Last updated: <span id="lastUpdated">--:--:--</span></div>
+  <div class="refresh-sep">|</div>
+  <div class="refresh-item">Nifty refreshes every <span>15s</span></div>
+  <div class="refresh-sep">|</div>
+  <div class="refresh-item">Markets in <span>60s</span></div>
+  <div class="refresh-sep">|</div>
+  <div class="refresh-item">Next refresh in <span id="refreshCountdown">15s</span></div>
 </div>
 
 <!-- ── INDICES ROW ── -->
@@ -528,7 +685,7 @@ body {
             </linearGradient>
           </defs>
           <!-- Background arc -->
-          <path d="M 10 90 A 80 80 0 0 1 170 90" fill="none" stroke="#1e2d47" stroke-width="12" stroke-linecap="round"/>
+          <path d="M 10 90 A 80 80 0 0 1 170 90" fill="none" stroke="#3d3d3d" stroke-width="12" stroke-linecap="round"/>
           <!-- Colored arc -->
           <path id="fgArc" d="M 10 90 A 80 80 0 0 1 170 90" fill="none" stroke="url(#fgGrad)" stroke-width="12" stroke-linecap="round" stroke-dasharray="251" stroke-dashoffset="251"/>
           <!-- Needle -->
@@ -550,20 +707,46 @@ body {
 
   <!-- Put/Call Ratio -->
   <div class="panel">
-    <h3>Put / Call Ratio</h3>
+    <h3>Put / Call Ratio — Intraday</h3>
+
+    <!-- Current PCR reading -->
     <div class="pcr-display">
-      <div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px">NIFTY OPTIONS PCR (OI Based)</div>
-      <div id="pcrValue" class="pcr-value" style="color:var(--yellow)">—</div>
-      <div id="pcrLabel" style="font-size:0.75rem;color:var(--muted2);margin-bottom:8px">Loading...</div>
-      <div class="pcr-bar-wrap">
+      <div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px">NIFTY PCR · VIX-Derived · Updates every 15 min</div>
+      <div style="display:flex;align-items:baseline;gap:12px;justify-content:center">
+        <div id="pcrValue" class="pcr-value" style="color:var(--yellow)">—</div>
+        <div id="pcrLabel" style="font-size:0.75rem;color:var(--muted2)">Loading...</div>
+      </div>
+      <div class="pcr-bar-wrap" style="margin-top:8px">
         <div id="pcrBar" class="pcr-bar" style="width:50%;background:var(--yellow)"></div>
       </div>
-      <div class="pcr-labels"><span>Extreme Fear (0.5)</span><span>Neutral (1.0)</span><span>Greed (1.5)</span></div>
+      <div class="pcr-labels"><span>Fear (0.5)</span><span>Neutral (1.0)</span><span>Greed (1.5)</span></div>
     </div>
-    <div id="pcrDetails"></div>
+
+    <!-- SMR Interpretation -->
+    <div style="margin:10px 0;padding:10px 12px;background:var(--surface2);border-radius:8px;border-left:3px solid var(--accent);font-size:0.75rem;line-height:1.7">
+      <div style="font-weight:700;color:var(--text);margin-bottom:4px;letter-spacing:0.04em">📊 SMR SIGNAL GUIDE</div>
+      <div><span style="color:var(--green);font-weight:700">SMR &gt; 60:</span> <span style="color:var(--muted2)">Suggests the market may bounce back (high fear, high put activity).</span></div>
+      <div><span style="color:var(--red);font-weight:700">SMR &lt; 20:</span> <span style="color:var(--muted2)">Suggests the market may fall (low fear, low put activity).</span></div>
+    </div>
+
+    <!-- Intraday PCR Chart -->
+    <div style="margin-top:12px">
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+        <div style="font-size:0.72rem;color:var(--muted);font-weight:600;letter-spacing:0.06em;text-transform:uppercase">Intraday PCR Trend (15-min intervals)</div>
+        <div style="display:flex;align-items:center;gap:6px;font-size:0.68rem;color:var(--muted)">
+          <span id="pcrDataPoints">0</span> data points
+          <span id="pcrSessionLabel" style="color:var(--accent)"></span>
+        </div>
+      </div>
+      <canvas id="pcrChart" height="140" style="width:100%;display:block"></canvas>
+      <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:0.65rem;color:var(--muted)">
+        <span>09:15</span><span>11:00</span><span>12:30</span><span>14:00</span><span>15:30</span>
+      </div>
+    </div>
+
+    <div id="pcrDetails" style="margin-top:10px"></div>
   </div>
 
-</div>
 
 <!-- ── ROW 2 ── -->
 <div class="grid-2" style="margin-top:16px">
@@ -574,7 +757,7 @@ body {
     <div class="ad-ring-wrap">
       <div class="ad-ring">
         <svg viewBox="0 0 90 90">
-          <circle cx="45" cy="45" r="35" fill="none" stroke="#1e2d47" stroke-width="8"/>
+          <circle cx="45" cy="45" r="35" fill="none" stroke="#3d3d3d" stroke-width="8"/>
           <circle id="adAdvArc" cx="45" cy="45" r="35" fill="none" stroke="#22c55e" stroke-width="8"
             stroke-dasharray="220" stroke-dashoffset="220" stroke-linecap="round"/>
           <circle id="adDecArc" cx="45" cy="45" r="35" fill="none" stroke="#ef4444" stroke-width="8"
@@ -628,6 +811,82 @@ body {
   </div>
 </div>
 
+<!-- ── FII / DII ACTIVITY ── -->
+<div class="section-label">FII / DII Activity</div>
+<div class="panel">
+  <h3>Foreign & Domestic Institutional Flows</h3>
+  <div class="tab-bar">
+    <button class="tab-btn active" onclick="switchFIITab('today',this)">Today</button>
+    <button class="tab-btn" onclick="switchFIITab('week',this)">This Week</button>
+    <button class="tab-btn" onclick="switchFIITab('prevweek',this)">Previous Week</button>
+  </div>
+
+  <!-- TODAY -->
+  <div class="tab-pane active" id="fii-tab-today">
+    <div class="fiidii-summary" id="fiiSummaryToday">
+      <div class="fiidii-card"><div class="fc-label">FII Net</div><div class="fc-val" id="fiiNetToday">—</div></div>
+      <div class="fiidii-card"><div class="fc-label">DII Net</div><div class="fc-val" id="diiNetToday">—</div></div>
+      <div class="fiidii-card"><div class="fc-label">Combined</div><div class="fc-val" id="combinedToday">—</div></div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="fiidii-table">
+        <thead><tr><th>Date</th><th>FII Buy</th><th>FII Sell</th><th>FII Net</th><th>DII Buy</th><th>DII Sell</th><th>DII Net</th></tr></thead>
+        <tbody id="fiiBodyToday"><tr><td colspan="7" style="color:var(--muted);padding:12px;text-align:center">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- THIS WEEK -->
+  <div class="tab-pane" id="fii-tab-week">
+    <div class="fiidii-summary">
+      <div class="fiidii-card"><div class="fc-label">FII Weekly Net</div><div class="fc-val" id="fiiNetWeek">—</div></div>
+      <div class="fiidii-card"><div class="fc-label">DII Weekly Net</div><div class="fc-val" id="diiNetWeek">—</div></div>
+      <div class="fiidii-card"><div class="fc-label">Combined</div><div class="fc-val" id="combinedWeek">—</div></div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="fiidii-table">
+        <thead><tr><th>Date</th><th>FII Buy</th><th>FII Sell</th><th>FII Net</th><th>DII Buy</th><th>DII Sell</th><th>DII Net</th></tr></thead>
+        <tbody id="fiiBodyWeek"><tr><td colspan="7" style="color:var(--muted);padding:12px;text-align:center">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <!-- PREVIOUS WEEK -->
+  <div class="tab-pane" id="fii-tab-prevweek">
+    <div class="fiidii-summary">
+      <div class="fiidii-card"><div class="fc-label">FII Prev Week Net</div><div class="fc-val" id="fiiNetPrevWeek">—</div></div>
+      <div class="fiidii-card"><div class="fc-label">DII Prev Week Net</div><div class="fc-val" id="diiNetPrevWeek">—</div></div>
+      <div class="fiidii-card"><div class="fc-label">Combined</div><div class="fc-val" id="combinedPrevWeek">—</div></div>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="fiidii-table">
+        <thead><tr><th>Date</th><th>FII Buy</th><th>FII Sell</th><th>FII Net</th><th>DII Buy</th><th>DII Sell</th><th>DII Net</th></tr></thead>
+        <tbody id="fiiBodyPrevWeek"><tr><td colspan="7" style="color:var(--muted);padding:12px;text-align:center">Loading...</td></tr></tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="margin-top:10px;font-size:0.7rem;color:var(--muted)">
+    ₹ in Crores &nbsp;|&nbsp; Source: NSE India (provisional figures, equity segment)
+  </div>
+</div>
+
+<!-- ── SECTOR HEATMAP ── -->
+<div class="section-label">Sector Heatmap</div>
+<div class="panel">
+  <h3>Nifty Sectoral Indices — Live % Change</h3>
+  <div class="heatmap-grid" id="sectorHeatmap">
+    <div class="skeleton" style="height:80px;border-radius:8px"></div>
+    <div class="skeleton" style="height:80px;border-radius:8px"></div>
+    <div class="skeleton" style="height:80px;border-radius:8px"></div>
+    <div class="skeleton" style="height:80px;border-radius:8px"></div>
+  </div>
+  <div style="margin-top:12px;display:flex;align-items:center;gap:8px;font-size:0.7rem;color:var(--muted)">
+    <span style="display:inline-block;width:60px;height:10px;border-radius:3px;background:linear-gradient(90deg,#ef4444,#f59e0b,#22c55e)"></span>
+    Strong Sell &nbsp;→&nbsp; Neutral &nbsp;→&nbsp; Strong Buy
+  </div>
+</div>
+
 <!-- ── ANNOUNCEMENTS ── -->
 <div class="section-label">Important Announcements</div>
 <div class="grid-2">
@@ -645,10 +904,14 @@ body {
 <div class="section-label">Nifty 50 Live Chart</div>
 <div class="panel">
   <h3>Intraday Chart</h3>
-  <iframe class="chart-frame"
-    src="https://ssltvc.investing.com/?pair_ID=13626&height=340&width=100%&interval=60&plotStyle=candles&domain_ID=56&lang_ID=56&timezone=Asia%2FKolkata"
-    title="Nifty Chart">
-  </iframe>
+  <div style="display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap" id="chartIntervalBtns">
+    <button onclick="setChartInterval('1')"  class="chart-btn" id="btn-1">1m</button>
+    <button onclick="setChartInterval('5')"  class="chart-btn" id="btn-5">5m</button>
+    <button onclick="setChartInterval('15')" class="chart-btn active" id="btn-15">15m</button>
+    <button onclick="setChartInterval('60')" class="chart-btn" id="btn-60">1H</button>
+    <button onclick="setChartInterval('D')"  class="chart-btn" id="btn-D">1D</button>
+  </div>
+  <div id="tradingview-chart"></div>
 </div>
 
 <!-- ── NEWS ── -->
@@ -662,8 +925,8 @@ body {
     <h3>LiveMint</h3>
     <div class="content"><div class="skeleton"></div></div>
   </div>
-  <div class="news-col" id="moneycontrol">
-    <h3>MoneyControl</h3>
+  <div class="news-col" id="bsmarkets">
+    <h3>Business Standard</h3>
     <div class="content"><div class="skeleton"></div></div>
   </div>
 </div>
@@ -829,42 +1092,207 @@ async function loadTicker() {
   document.getElementById("ticker").innerHTML = html || "Ticker unavailable";
 }
 
+/* ─── PCR INTRADAY CHART ─── */
+const pcrHistory = { labels: [], values: [], smr: [], colors: [] };
+let pcrChartInstance = null;
+
+function pcrToSMR(pcr) {
+  // Map PCR 0.5–1.5 → SMR 0–100
+  return Math.round(Math.min(100, Math.max(0, (pcr - 0.5) / 1.0 * 100)));
+}
+
+function smrColor(smr) {
+  if (smr >= 60) return "#22c55e";
+  if (smr >= 40) return "#f59e0b";
+  return "#ef4444";
+}
+
+function initPCRChart() {
+  const canvas = document.getElementById("pcrChart");
+  if (!canvas) return;
+  const ctx = canvas.getContext("2d");
+  pcrChartInstance = new Chart(ctx, {
+    type: "line",
+    data: {
+      labels: pcrHistory.labels,
+      datasets: [
+        {
+          label: "PCR",
+          data: pcrHistory.values,
+          borderColor: "#3b82f6",
+          backgroundColor: "rgba(59,130,246,0.08)",
+          borderWidth: 2,
+          pointRadius: 4,
+          pointBackgroundColor: pcrHistory.colors,
+          pointBorderColor: pcrHistory.colors,
+          tension: 0.35,
+          fill: true,
+          yAxisID: "yPCR",
+        },
+        {
+          label: "SMR",
+          data: pcrHistory.smr,
+          borderColor: "#f59e0b",
+          backgroundColor: "rgba(245,158,11,0.0)",
+          borderWidth: 1.5,
+          borderDash: [4, 3],
+          pointRadius: 0,
+          tension: 0.35,
+          fill: false,
+          yAxisID: "ySMR",
+        }
+      ]
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      animation: { duration: 400 },
+      interaction: { mode: "index", intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          labels: {
+            color: "#94a3b8",
+            font: { family: "Inter", size: 11 },
+            boxWidth: 12,
+            padding: 10,
+          }
+        },
+        tooltip: {
+          backgroundColor: "#1f1f1f",
+          borderColor: "#3d3d3d",
+          borderWidth: 1,
+          titleColor: "#e2e8f0",
+          bodyColor: "#94a3b8",
+          titleFont: { family: "Inter", weight: "700" },
+          bodyFont: { family: "Inter" },
+          callbacks: {
+            label: ctx => {
+              if (ctx.dataset.label === "PCR") return ` PCR: ${ctx.parsed.y.toFixed(2)}`;
+              if (ctx.dataset.label === "SMR") return ` SMR: ${ctx.parsed.y}`;
+              return ctx.parsed.y;
+            }
+          }
+        },
+      },
+      scales: {
+        x: {
+          ticks: { color: "#64748b", font: { family: "Inter", size: 10 }, maxTicksLimit: 8 },
+          grid: { color: "#2d2d2d" },
+          border: { color: "#3d3d3d" }
+        },
+        yPCR: {
+          position: "left",
+          min: 0.5, max: 1.5,
+          ticks: { color: "#3b82f6", font: { family: "Inter", size: 10 }, stepSize: 0.25 },
+          grid: { color: "#2a2a2a" },
+          border: { color: "#3d3d3d" },
+          title: { display: true, text: "PCR", color: "#3b82f6", font: { size: 10 } }
+        },
+        ySMR: {
+          position: "right",
+          min: 0, max: 100,
+          ticks: { color: "#f59e0b", font: { family: "Inter", size: 10 }, stepSize: 20 },
+          grid: { drawOnChartArea: false },
+          border: { color: "#3d3d3d" },
+          title: { display: true, text: "SMR", color: "#f59e0b", font: { size: 10 } }
+        }
+      }
+    }
+  });
+
+  // Reference lines at SMR 20 and 60
+  Chart.register({
+    id: "pcrZones",
+    afterDraw(chart) {
+      if (chart.canvas.id !== "pcrChart") return;
+      const { ctx, scales: { ySMR, x } } = chart;
+      if (!ySMR) return;
+      const xLeft = x.left, xRight = x.right;
+      [[60, "#22c55e", "SMR 60 — Bounce Zone"], [20, "#ef4444", "SMR 20 — Drop Zone"]].forEach(([val, col, lbl]) => {
+        const y = ySMR.getPixelForValue(val);
+        ctx.save();
+        ctx.beginPath();
+        ctx.setLineDash([5, 4]);
+        ctx.strokeStyle = col + "55";
+        ctx.lineWidth = 1;
+        ctx.moveTo(xLeft, y); ctx.lineTo(xRight, y);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.fillStyle = col + "99";
+        ctx.font = "10px Inter";
+        ctx.fillText(lbl, xRight - 110, y - 4);
+        ctx.restore();
+      });
+    }
+  });
+}
+
+function updatePCRChart(pcr, label) {
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
+  const smrVal = pcrToSMR(pcr);
+  const col = smrColor(smrVal);
+
+  pcrHistory.labels.push(timeStr);
+  pcrHistory.values.push(pcr);
+  pcrHistory.smr.push(smrVal);
+  pcrHistory.colors.push(col);
+
+  // Keep max 26 points (market hours 9:15–15:30 = 25 intervals)
+  if (pcrHistory.labels.length > 26) {
+    pcrHistory.labels.shift(); pcrHistory.values.shift();
+    pcrHistory.smr.shift(); pcrHistory.colors.shift();
+  }
+
+  const dp = document.getElementById("pcrDataPoints");
+  if (dp) dp.textContent = pcrHistory.labels.length;
+
+  if (!pcrChartInstance) { initPCRChart(); return; }
+  pcrChartInstance.data.labels = [...pcrHistory.labels];
+  pcrChartInstance.data.datasets[0].data = [...pcrHistory.values];
+  pcrChartInstance.data.datasets[0].pointBackgroundColor = [...pcrHistory.colors];
+  pcrChartInstance.data.datasets[0].pointBorderColor = [...pcrHistory.colors];
+  pcrChartInstance.data.datasets[1].data = [...pcrHistory.smr];
+  pcrChartInstance.update("none");
+}
+
 /* ─── PCR (PUT/CALL RATIO) ─── */
 async function loadPCR() {
-  // PCR computed from NSE options data via Yahoo for Nifty options proxy
-  // Using OI from NIFTY monthly options approximation
   try {
-    // Simulate a realistic PCR using VIX as proxy (real NSE API needs CORS bypass)
     const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/INDIAVIX.NS"));
     const d = await r.json();
     const vix = d.chart.result[0].meta.regularMarketPrice;
-    // Derive PCR estimate: high VIX = more puts = higher PCR (fear), low VIX = more calls = lower PCR
-    // Realistic range: 0.6–1.5
-    const pcr = Math.max(0.6, Math.min(1.5, (1.0 + (20 - vix) / 40))).toFixed(2);
-    const pcrNum = parseFloat(pcr);
+    const pcr = Math.max(0.6, Math.min(1.5, (1.0 + (20 - vix) / 40)));
+    const pcrNum = parseFloat(pcr.toFixed(2));
+    const smr = pcrToSMR(pcrNum);
     let label, color;
-    if (pcrNum < 0.75) { label = "Extreme Greed (Bearish Signal)"; color = "#ef4444"; }
-    else if (pcrNum < 0.9) { label = "Greed Zone"; color = "#f97316"; }
-    else if (pcrNum <= 1.1) { label = "Neutral Market"; color = "#f59e0b"; }
-    else if (pcrNum <= 1.3) { label = "Fear Zone (Bullish Contrarian)"; color = "#84cc16"; }
-    else { label = "Extreme Fear (Strong Buy Signal)"; color = "#22c55e"; }
-    document.getElementById("pcrValue").textContent = pcr;
+    if (pcrNum < 0.75) { label = "Extreme Greed (Bearish)";        color = "#ef4444"; }
+    else if (pcrNum < 0.9)  { label = "Greed Zone";                color = "#f97316"; }
+    else if (pcrNum <= 1.1) { label = "Neutral Market";            color = "#f59e0b"; }
+    else if (pcrNum <= 1.3) { label = "Fear Zone (Bullish)";       color = "#84cc16"; }
+    else                    { label = "Extreme Fear (Strong Buy)";  color = "#22c55e"; }
+
+    document.getElementById("pcrValue").textContent = pcrNum.toFixed(2);
     document.getElementById("pcrValue").style.color = color;
     document.getElementById("pcrLabel").textContent = label;
     document.getElementById("pcrLabel").style.color = color;
-    // Bar: map 0.5 to 1.5 range → 0–100%
+
     const barPct = Math.min(100, Math.max(0, (pcrNum - 0.5) / 1.0 * 100));
     document.getElementById("pcrBar").style.width = barPct + "%";
     document.getElementById("pcrBar").style.background = color;
+
+    const smrCol = smrColor(smr);
     document.getElementById("pcrDetails").innerHTML = `
-      <div class="data-row"><span class="label">VIX Used</span><span class="val">${vix.toFixed(2)}</span></div>
-      <div class="data-row"><span class="label">PCR Signal</span><span class="val" style="color:${color}">${label}</span></div>
-      <div style="margin-top:8px;padding:8px;background:var(--surface2);border-radius:6px;font-size:0.72rem;color:var(--muted)">
-        PCR &gt; 1.2 = Bullish (fear, oversold) &nbsp;|&nbsp; PCR &lt; 0.8 = Bearish (greed, overbought)
-      </div>`;
+      <div class="data-row"><span class="label">India VIX</span><span class="val">${vix.toFixed(2)}</span></div>
+      <div class="data-row"><span class="label">PCR</span><span class="val" style="color:${color}">${pcrNum.toFixed(2)} — ${label}</span></div>
+      <div class="data-row"><span class="label">SMR Score</span><span class="val" style="color:${smrCol};font-weight:700">${smr} / 100</span></div>`;
+
+    updatePCRChart(pcrNum, label);
     updateFearGreed(vix, pcrNum);
   } catch { document.getElementById("pcrValue").textContent = "N/A"; }
 }
+
 
 /* ─── FEAR & GREED ─── */
 function updateFearGreed(vix, pcr) {
@@ -1063,8 +1491,252 @@ async function fetchRSS(url, id) {
   } catch { document.querySelector("#" + id + " .content").innerHTML = "<div style='color:var(--muted)'>Feed unavailable</div>"; }
 }
 
-/* ─── BOOT ─── */
+/* ─── TRADINGVIEW CHART ─── */
+let tvWidget = null;
+let currentInterval = "15";
+
+function initTVChart(interval) {
+  document.getElementById("tradingview-chart").innerHTML = "";
+  const script = document.createElement("script");
+  script.src = "https://s3.tradingview.com/tv.js";
+  script.onload = function () {
+    tvWidget = new TradingView.widget({
+      container_id: "tradingview-chart",
+      width: "100%",
+      height: 420,
+      symbol: "NSE:NIFTY",
+      interval: interval,
+      timezone: "Asia/Kolkata",
+      theme: "dark",
+      style: "1",
+      locale: "en",
+      toolbar_bg: "#2a2a2a",
+      enable_publishing: false,
+      hide_top_toolbar: false,
+      hide_legend: false,
+      save_image: false,
+      backgroundColor: "#2a2a2a",
+      gridColor: "#3d3d3d",
+      studies: ["RSI@tv-basicstudies", "MACD@tv-basicstudies"],
+      withdateranges: true,
+    });
+  };
+  document.head.appendChild(script);
+}
+
+function setChartInterval(interval) {
+  currentInterval = interval;
+  document.querySelectorAll(".chart-btn").forEach(b => b.classList.remove("active"));
+  const btnId = "btn-" + interval;
+  const btn = document.getElementById(btnId);
+  if (btn) btn.classList.add("active");
+  // If TradingView already loaded, re-init with new interval
+  if (window.TradingView) {
+    document.getElementById("tradingview-chart").innerHTML = "";
+    tvWidget = new TradingView.widget({
+      container_id: "tradingview-chart",
+      width: "100%",
+      height: 420,
+      symbol: "NSE:NIFTY",
+      interval: interval,
+      timezone: "Asia/Kolkata",
+      theme: "dark",
+      style: "1",
+      locale: "en",
+      toolbar_bg: "#2a2a2a",
+      enable_publishing: false,
+      hide_top_toolbar: false,
+      save_image: false,
+      backgroundColor: "#2a2a2a",
+      gridColor: "#3d3d3d",
+      studies: ["RSI@tv-basicstudies", "MACD@tv-basicstudies"],
+      withdateranges: true,
+    });
+  } else {
+    initTVChart(interval);
+  }
+}
+
+initTVChart("15");
+
+/* ─── AUTO-REFRESH INDICATOR ─── */
+let refreshCountdown = 15;
+function updateRefreshIndicator() {
+  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  const el = document.getElementById("lastUpdated");
+  if (el) el.textContent = now.toLocaleTimeString("en-IN");
+}
+function startCountdown() {
+  refreshCountdown = 15;
+  clearInterval(window._cdInterval);
+  window._cdInterval = setInterval(() => {
+    refreshCountdown--;
+    const el = document.getElementById("refreshCountdown");
+    if (el) el.textContent = refreshCountdown + "s";
+    if (refreshCountdown <= 0) refreshCountdown = 15;
+  }, 1000);
+}
+
+/* ─── FII / DII ─── */
+function switchFIITab(tab, btn) {
+  document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+  document.querySelectorAll(".tab-pane").forEach(p => p.classList.remove("active"));
+  btn.classList.add("active");
+  document.getElementById("fii-tab-" + tab).classList.add("active");
+}
+
+function fmtCr(val) {
+  const n = parseFloat(val);
+  const abs = Math.abs(n);
+  const formatted = abs >= 1000 ? "₹" + (abs / 1000).toFixed(2) + "K Cr" : "₹" + abs.toFixed(0) + " Cr";
+  return { str: (n >= 0 ? "+" : "-") + formatted, color: n >= 0 ? "#22c55e" : "#ef4444" };
+}
+
+function renderFIITable(tbodyId, rows) {
+  if (!rows.length) {
+    document.getElementById(tbodyId).innerHTML = `<tr><td colspan="7" style="color:var(--muted);padding:12px;text-align:center">No data available</td></tr>`;
+    return;
+  }
+  let html = "";
+  for (const r of rows) {
+    const fNet = r.fiiBuy - r.fiiSell;
+    const dNet = r.diiBuy - r.diiSell;
+    const fn = fmtCr(fNet), dn = fmtCr(dNet);
+    html += `<tr>
+      <td>${r.date}</td>
+      <td style="color:var(--green)">₹${r.fiiBuy.toFixed(0)}</td>
+      <td style="color:var(--red)">₹${r.fiiSell.toFixed(0)}</td>
+      <td class="${fNet >= 0 ? "fiidii-net-pos" : "fiidii-net-neg"}">${fn.str}</td>
+      <td style="color:var(--green)">₹${r.diiBuy.toFixed(0)}</td>
+      <td style="color:var(--red)">₹${r.diiSell.toFixed(0)}</td>
+      <td class="${dNet >= 0 ? "fiidii-net-pos" : "fiidii-net-neg"}">${dn.str}</td>
+    </tr>`;
+  }
+  document.getElementById(tbodyId).innerHTML = html;
+}
+
+function updateFIISummary(suffix, rows) {
+  const fiiTotal = rows.reduce((a, r) => a + (r.fiiBuy - r.fiiSell), 0);
+  const diiTotal = rows.reduce((a, r) => a + (r.diiBuy - r.diiSell), 0);
+  const combined = fiiTotal + diiTotal;
+  const fn = fmtCr(fiiTotal), dn = fmtCr(diiTotal), cn = fmtCr(combined);
+  const fe = document.getElementById("fiiNet" + suffix);
+  const de = document.getElementById("diiNet" + suffix);
+  const ce = document.getElementById("combined" + suffix);
+  if (fe) { fe.textContent = fn.str; fe.style.color = fn.color; }
+  if (de) { de.textContent = dn.str; de.style.color = dn.color; }
+  if (ce) { ce.textContent = cn.str; ce.style.color = cn.color; }
+}
+
+async function loadFIIDII() {
+  try {
+    const url = "https://www.nseindia.com/api/fiidiiTradeReact";
+    const r = await fetch(proxy + encodeURIComponent(url));
+    const data = await r.json();
+    const rows = (Array.isArray(data) ? data : []).slice(0, 15).map(item => ({
+      date:     item.date || item.trading_date || "—",
+      fiiBuy:   parseFloat(item.fii_buy_value  || item.fiiBuyValue  || 0),
+      fiiSell:  parseFloat(item.fii_sell_value || item.fiiSellValue || 0),
+      diiBuy:   parseFloat(item.dii_buy_value  || item.diiBuyValue  || 0),
+      diiSell:  parseFloat(item.dii_sell_value || item.diiSellValue || 0),
+    }));
+    if (!rows.length) throw new Error("empty");
+    const todayRows = rows.slice(0, 1);
+    const weekRows  = rows.slice(0, 5);
+    const prevRows  = rows.slice(5, 10);
+    renderFIITable("fiiBodyToday",    todayRows);
+    renderFIITable("fiiBodyWeek",     weekRows);
+    renderFIITable("fiiBodyPrevWeek", prevRows);
+    updateFIISummary("Today",    todayRows);
+    updateFIISummary("Week",     weekRows);
+    updateFIISummary("PrevWeek", prevRows);
+  } catch {
+    // Fallback: realistic simulated data when NSE blocks CORS
+    const today = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
+    const rows = [];
+    for (let i = 0; rows.length < 10; i++) {
+      const d = new Date(today); d.setDate(d.getDate() - i);
+      if (d.getDay() === 0 || d.getDay() === 6) continue;
+      rows.push({
+        date:    d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"2-digit"}),
+        fiiBuy:  Math.round(8000 + Math.random() * 6000),
+        fiiSell: Math.round(7000 + Math.random() * 6000),
+        diiBuy:  Math.round(5000 + Math.random() * 4000),
+        diiSell: Math.round(4000 + Math.random() * 4000),
+      });
+    }
+    const todayRows = rows.slice(0, 1);
+    const weekRows  = rows.slice(0, 5);
+    const prevRows  = rows.slice(5, 10);
+    renderFIITable("fiiBodyToday",    todayRows);
+    renderFIITable("fiiBodyWeek",     weekRows);
+    renderFIITable("fiiBodyPrevWeek", prevRows);
+    updateFIISummary("Today",    todayRows);
+    updateFIISummary("Week",     weekRows);
+    updateFIISummary("PrevWeek", prevRows);
+    const note = document.createElement("div");
+    note.style.cssText = "margin-top:10px;font-size:0.7rem;color:var(--yellow);padding:6px 10px;background:rgba(245,158,11,0.08);border-radius:6px;border:1px solid rgba(245,158,11,0.2)";
+    note.innerHTML = "⚠ NSE live data blocked by CORS. Showing simulated figures. For live data visit <a href='https://www.nseindia.com/reports-indices-equity-fiidii' target='_blank' style='color:var(--accent)'>nseindia.com</a>";
+    document.getElementById("fii-tab-today").appendChild(note);
+  }
+}
+
+/* ─── SECTOR HEATMAP ─── */
+const sectors = [
+  { name: "Banking",  symbol: "%5ENIFTYBANK"       },
+  { name: "IT",       symbol: "NIFTYIT.NS"          },
+  { name: "Pharma",   symbol: "%5ENIFTYPHARMA"      },
+  { name: "Auto",     symbol: "%5ENIFTYAUTO"        },
+  { name: "FMCG",     symbol: "%5ECNXFMCG"         },
+  { name: "Metal",    symbol: "%5ENIFTYMETAL"       },
+  { name: "Energy",   symbol: "%5ENIFTYENERGY"      },
+  { name: "Realty",   symbol: "%5ENIFTYREALTY"      },
+  { name: "Infra",    symbol: "%5ENIFTYINFRA"       },
+  { name: "Media",    symbol: "%5ECNXMEDIA"         },
+  { name: "PSU Bank", symbol: "%5ENIFTYPSUBNK"      },
+  { name: "MidCap",   symbol: "%5ENIFTY_MIDCAP100"  },
+];
+
+function pctToHeatColor(pct) {
+  const v = Math.max(-3, Math.min(3, pct));
+  if (v >= 2)    return { bg: "#166534", border: "#22c55e" };
+  if (v >= 1)    return { bg: "#14532d", border: "#4ade80" };
+  if (v >= 0.3)  return { bg: "#1a3a28", border: "#86efac" };
+  if (v >= -0.3) return { bg: "#2d2a1a", border: "#fbbf24" };
+  if (v >= -1)   return { bg: "#3b1a1a", border: "#f87171" };
+  if (v >= -2)   return { bg: "#4c1414", border: "#ef4444" };
+  return               { bg: "#5c0f0f", border: "#dc2626" };
+}
+
+async function loadSectorHeatmap() {
+  let html = "";
+  for (const s of sectors) {
+    try {
+      const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/" + s.symbol));
+      const d = await r.json();
+      const m = d.chart.result[0].meta;
+      const price = m.regularMarketPrice;
+      const pct = parseFloat(((price - m.previousClose) / m.previousClose * 100).toFixed(2));
+      const { bg, border } = pctToHeatColor(pct);
+      const sign = pct >= 0 ? "+" : "";
+      html += `<div class="hm-cell" style="background:${bg};border:1px solid ${border}">
+        <div class="hm-name">${s.name}</div>
+        <div class="hm-pct">${sign}${pct}%</div>
+        <div class="hm-price">${price.toFixed(2)}</div>
+      </div>`;
+    } catch {
+      html += `<div class="hm-cell" style="background:var(--surface2);border:1px solid var(--border)">
+        <div class="hm-name">${s.name}</div>
+        <div class="hm-pct" style="color:var(--muted)">—</div>
+      </div>`;
+    }
+  }
+  document.getElementById("sectorHeatmap").innerHTML = html;
+}
+
 updateClock();
+updateRefreshIndicator();
+startCountdown();
 fetchNifty();
 loadIndices();
 loadGlobal();
@@ -1075,23 +1747,29 @@ loadPCR();
 loadAdvanceDecline();
 load52Week();
 loadAnnouncements();
+loadFIIDII();
+loadSectorHeatmap();
 
 fetchRSS("https://timesofindia.indiatimes.com/rssfeeds/1898055.cms", "toi");
 fetchRSS("https://www.livemint.com/rss/markets", "livemint");
-fetchRSS("https://www.moneycontrol.com/rss/marketreports.xml", "moneycontrol");
+fetchRSS("https://www.business-standard.com/rss/markets-106.rss", "bsmarkets");
 
 /* ─── REFRESH INTERVALS ─── */
 setInterval(updateClock, 1000);
-setInterval(fetchNifty, 15000);
+setInterval(() => { fetchNifty(); updateRefreshIndicator(); startCountdown(); }, 15000);
 setInterval(loadIndices, 30000);
 setInterval(loadGlobal, 60000);
 setInterval(loadGiftPanel, 60000);
 setInterval(loadCommodities, 60000);
 setInterval(loadTicker, 60000);
-setInterval(loadPCR, 120000);
+setInterval(loadPCR, 15 * 60 * 1000);  // every 15 min for intraday chart
 setInterval(loadAdvanceDecline, 300000);
 setInterval(load52Week, 300000);
 setInterval(loadAnnouncements, 600000);
+setInterval(loadFIIDII, 300000);
+setInterval(loadSectorHeatmap, 60000);
+
+
 
 </script>
 </body>

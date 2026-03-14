@@ -745,6 +745,7 @@ body {
     </div>
 
     <div id="pcrDetails" style="margin-top:10px"></div>
+    <div id="pcrStorageStatus" style="margin-top:8px;font-size:0.68rem;color:var(--muted);padding:5px 8px;background:var(--surface2);border-radius:6px">⟳ Connecting to GitHub storage...</div>
   </div>
 
 
@@ -1228,21 +1229,147 @@ function initPCRChart() {
   });
 }
 
+/* ─── GITHUB PERSISTENT STORAGE ─── */
+const GH_USER  = "ivijaysinghchoudhary";
+const GH_REPO  = "testnew";
+const GH_TOKEN = "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";
+const GH_FILE  = "pcr_data.json";
+const GH_API   = `https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`;
+
+function todayIST() {
+  return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }))
+    .toISOString().slice(0, 10);
+}
+
+async function ghReadPCR() {
+  try {
+    const r = await fetch(GH_API, {
+      headers: { Authorization: `token ${GH_TOKEN}`, Accept: "application/vnd.github.v3+json" }
+    });
+    if (!r.ok) return null;
+    const meta = await r.json();
+    const content = JSON.parse(atob(meta.content.replace(/\n/g, "")));
+    return { data: content, sha: meta.sha };
+  } catch { return null; }
+}
+
+async function ghWritePCR(newPoint) {
+  // Read existing file first (need SHA for update)
+  const existing = await ghReadPCR();
+  const today = todayIST();
+
+  let stored = existing ? existing.data : {};
+  // Reset if new day
+  if (!stored.date || stored.date !== today) {
+    stored = { date: today, points: [] };
+  }
+
+  // Avoid duplicate timestamps
+  const alreadyExists = stored.points.some(p => p.time === newPoint.time);
+  if (alreadyExists) return;
+
+  stored.points.push(newPoint);
+  // Keep max 26 points
+  if (stored.points.length > 26) stored.points.shift();
+
+  const body = {
+    message: `PCR update ${today} ${newPoint.time}`,
+    content: btoa(JSON.stringify(stored, null, 2)),
+    ...(existing ? { sha: existing.sha } : {})
+  };
+
+  try {
+    await fetch(GH_API, {
+      method: "PUT",
+      headers: {
+        Authorization: `token ${GH_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+    // Update status indicator
+    const el = document.getElementById("pcrStorageStatus");
+    if (el) { el.textContent = "✓ Saved to GitHub " + newPoint.time; el.style.color = "#22c55e"; }
+  } catch {
+    const el = document.getElementById("pcrStorageStatus");
+    if (el) { el.textContent = "⚠ Save failed"; el.style.color = "#ef4444"; }
+  }
+}
+
+async function ghLoadPCRHistory() {
+  const el = document.getElementById("pcrStorageStatus");
+  if (el) { el.textContent = "⟳ Loading from GitHub..."; el.style.color = "#f59e0b"; }
+
+  const existing = await ghReadPCR();
+  if (!existing) {
+    if (el) { el.textContent = "No saved data yet — will save on first reading"; el.style.color = "#64748b"; }
+    return;
+  }
+
+  const today = todayIST();
+  const stored = existing.data;
+
+  // Only load today's data
+  if (!stored.date || stored.date !== today || !stored.points.length) {
+    if (el) { el.textContent = "No data for today yet"; el.style.color = "#64748b"; }
+    return;
+  }
+
+  // Rebuild history from stored points
+  pcrHistory.labels = [];
+  pcrHistory.values = [];
+  pcrHistory.smr    = [];
+  pcrHistory.colors = [];
+
+  for (const p of stored.points) {
+    pcrHistory.labels.push(p.time);
+    pcrHistory.values.push(p.pcr);
+    pcrHistory.smr.push(p.smr);
+    pcrHistory.colors.push(smrColor(p.smr));
+  }
+
+  const dp = document.getElementById("pcrDataPoints");
+  if (dp) dp.textContent = pcrHistory.labels.length;
+
+  // Draw chart with restored data
+  if (pcrChartInstance) {
+    pcrChartInstance.data.labels = [...pcrHistory.labels];
+    pcrChartInstance.data.datasets[0].data = [...pcrHistory.values];
+    pcrChartInstance.data.datasets[0].pointBackgroundColor = [...pcrHistory.colors];
+    pcrChartInstance.data.datasets[0].pointBorderColor = [...pcrHistory.colors];
+    pcrChartInstance.data.datasets[1].data = [...pcrHistory.smr];
+    pcrChartInstance.update();
+  } else {
+    initPCRChart();
+  }
+
+  if (el) {
+    el.textContent = `✓ Loaded ${stored.points.length} points from GitHub (${stored.date})`;
+    el.style.color = "#22c55e";
+  }
+}
+
 function updatePCRChart(pcr, label) {
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
   const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: false });
   const smrVal = pcrToSMR(pcr);
   const col = smrColor(smrVal);
 
-  pcrHistory.labels.push(timeStr);
-  pcrHistory.values.push(pcr);
-  pcrHistory.smr.push(smrVal);
-  pcrHistory.colors.push(col);
+  // Check if this timestamp already exists (avoid duplicates on page refresh)
+  if (!pcrHistory.labels.includes(timeStr)) {
+    pcrHistory.labels.push(timeStr);
+    pcrHistory.values.push(pcr);
+    pcrHistory.smr.push(smrVal);
+    pcrHistory.colors.push(col);
 
-  // Keep max 26 points (market hours 9:15–15:30 = 25 intervals)
-  if (pcrHistory.labels.length > 26) {
-    pcrHistory.labels.shift(); pcrHistory.values.shift();
-    pcrHistory.smr.shift(); pcrHistory.colors.shift();
+    if (pcrHistory.labels.length > 26) {
+      pcrHistory.labels.shift(); pcrHistory.values.shift();
+      pcrHistory.smr.shift(); pcrHistory.colors.shift();
+    }
+
+    // Save to GitHub
+    ghWritePCR({ time: timeStr, pcr, smr: smrVal });
   }
 
   const dp = document.getElementById("pcrDataPoints");
@@ -1743,7 +1870,8 @@ loadGlobal();
 loadGiftPanel();
 loadCommodities();
 loadTicker();
-loadPCR();
+// Load stored PCR history from GitHub first, then fetch live
+ghLoadPCRHistory().then(() => loadPCR());
 loadAdvanceDecline();
 load52Week();
 loadAnnouncements();

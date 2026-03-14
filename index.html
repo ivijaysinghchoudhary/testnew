@@ -1185,12 +1185,31 @@ body {
   <div class="signal-header">
     <div>
       <div class="signal-title">📊 Option Buy Signal — Nifty 50</div>
-      <div style="font-size:0.68rem;color:var(--muted);margin-top:3px">Based on PCR · VIX · Advance/Decline · Nifty Spot · Momentum</div>
+      <div style="font-size:0.68rem;color:var(--muted);margin-top:3px">Based on IVR · VIX Regime · A/D Breadth · Gap · Momentum · S/R Context</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
       <div class="signal-expiry" id="sigExpiryLabel">Weekly Expiry: —</div>
       <button class="notify-btn" id="notifyToggleBtn" onclick="toggleNotifications()">🔔 Enable Alerts</button>
     </div>
+  </div>
+
+  <!-- ── REGIME BANNER ── -->
+  <div id="regimeBanner" style="margin:0;padding:12px 16px;display:flex;align-items:center;gap:12px;flex-wrap:wrap;border-bottom:1px solid var(--border)">
+    <div style="flex-shrink:0">
+      <div style="font-size:0.62rem;color:var(--muted);text-transform:uppercase;letter-spacing:0.08em">Market Regime</div>
+      <div id="regimeLabel" style="font-size:1rem;font-weight:800">—</div>
+    </div>
+    <div id="regimeDesc" style="font-size:0.72rem;color:var(--muted2);flex:1;line-height:1.6">Calculating regime...</div>
+    <div id="regimeSizing" style="flex-shrink:0;font-size:0.72rem;font-weight:700;padding:4px 12px;border-radius:20px;border:1px solid var(--border2)">—</div>
+  </div>
+
+  <!-- ── S/R KEY LEVELS ── -->
+  <div id="srPanel" style="padding:10px 16px;border-bottom:1px solid var(--border);display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+    <span style="font-size:0.65rem;color:var(--muted);font-weight:700;text-transform:uppercase;letter-spacing:0.08em;flex-shrink:0">Key Levels:</span>
+    <div id="srLevels" style="display:flex;gap:6px;flex-wrap:wrap;flex:1">
+      <span style="font-size:0.7rem;color:var(--muted)">Computing S/R levels...</span>
+    </div>
+    <div id="srProximityWarn" style="font-size:0.7rem;display:none"></div>
   </div>
 
   <div class="signal-main">
@@ -1269,12 +1288,17 @@ body {
         <div class="data-row"><span class="label">Nifty Spot</span><span class="val" id="si-spot">—</span></div>
         <div class="data-row"><span class="label">Prev Close</span><span class="val" id="si-prev">—</span></div>
         <div class="data-row"><span class="label">Day Change</span><span class="val" id="si-chg">—</span></div>
+        <div class="data-row"><span class="label">Gap %</span><span class="val" id="si-gap">—</span></div>
         <div class="data-row"><span class="label">India VIX</span><span class="val" id="si-vix">—</span></div>
-        <div class="data-row"><span class="label">PCR</span><span class="val" id="si-pcr">—</span></div>
-        <div class="data-row"><span class="label">SMR Score</span><span class="val" id="si-smr">—</span></div>
+        <div class="data-row"><span class="label">VIX Percentile</span><span class="val" id="si-vixpct">—</span></div>
+        <div class="data-row"><span class="label">IV Rank (IVR)</span><span class="val" id="si-smr">—</span></div>
+        <div class="data-row"><span class="label">PCR <small style="color:var(--muted)">(proxy)</small></span><span class="val" id="si-pcr">—</span></div>
         <div class="data-row"><span class="label">A/D Ratio</span><span class="val" id="si-ad">—</span></div>
         <div class="data-row"><span class="label">Breadth</span><span class="val" id="si-breadth">—</span></div>
         <div class="data-row"><span class="label">ATM Strike</span><span class="val" id="si-atm">—</span></div>
+        <div class="data-row"><span class="label">Nearest S/R</span><span class="val" id="si-sr">—</span></div>
+        <div class="data-row"><span class="label">S/R Distance</span><span class="val" id="si-srdist">—</span></div>
+        <div class="data-row"><span class="label">Regime</span><span class="val" id="si-regime">—</span></div>
         <div class="data-row"><span class="label">Signal Time</span><span class="val" id="si-time">—</span></div>
       </div>
 
@@ -2476,57 +2500,367 @@ function isSignalTime() {
   return SIGNAL_TIMES.includes(hhmm) && hhmm !== lastSignalTime;
 }
 
-// Core signal logic
-function computeSignal({ spot, prevClose, vix, pcr, smr, adRatio, breadthPct }) {
+/* ─── MARKET REGIME CLASSIFIER ─── */
+// 4 regimes based on VIX absolute + IVR + trend
+function classifyRegime(vix, ivRank, vixPercentile, dayChgPct, breadthPct) {
+  // Regime 1: BULL LOW-VOL — ideal for CE buying
+  // Regime 2: BULL HIGH-VOL — choppy bull, selective CE only
+  // Regime 3: BEAR HIGH-VOL — PE on breakdowns, high conviction only
+  // Regime 4: CHOPPY / MEAN-REVERT — avoid directional options
+
+  const lowVol     = vix < 14;
+  const normalVol  = vix >= 14 && vix < 18;
+  const elevVol    = vix >= 18 && vix < 22;
+  const highVol    = vix >= 22;
+  const cheapOpts  = ivRank <= 40;
+  const expOpts    = ivRank > 60;
+  const bullish    = breadthPct >= 55 && dayChgPct >= 0;
+  const bearish    = breadthPct <= 45 && dayChgPct <= 0;
+  const vixNearLow = vixPercentile <= 30;
+  const vixNearHi  = vixPercentile >= 70;
+
+  let regime, color, bg, advice, sizing;
+
+  if (lowVol && cheapOpts && bullish) {
+    regime  = "🟢 BULL LOW-VOL";
+    color   = "#22c55e";
+    bg      = "rgba(34,197,94,0.07)";
+    advice  = "Ideal for CE buying. Options cheap, trend intact. Full size on score ≥6. OTM viable on score ≥7.";
+    sizing  = "Full Size";
+  } else if ((lowVol || normalVol) && cheapOpts && !bearish) {
+    regime  = "🟢 CALM / TRENDING";
+    color   = "#84cc16";
+    bg      = "rgba(132,204,22,0.07)";
+    advice  = "Good environment. Both CE and PE viable depending on signal. Normal sizing applies.";
+    sizing  = "Normal Size";
+  } else if (elevVol && !expOpts && bullish) {
+    regime  = "🟡 BULL ELEVATED-VOL";
+    color   = "#f59e0b";
+    bg      = "rgba(245,158,11,0.07)";
+    advice  = "Elevated vol in bullish context. CE viable but reduce size. Avoid OTM. Score ≥7 required.";
+    sizing  = "70% Size";
+  } else if (elevVol && !expOpts && bearish) {
+    regime  = "🟠 BEAR ELEVATED-VOL";
+    color   = "#f97316";
+    bg      = "rgba(249,115,22,0.07)";
+    advice  = "Elevated vol in bearish context. PE on confirmed breakdowns only. ATM only. Score ≥7.";
+    sizing  = "60% Size";
+  } else if (highVol && bearish) {
+    regime  = "🔴 HIGH-VOL BREAKDOWN";
+    color   = "#ef4444";
+    bg      = "rgba(239,68,68,0.07)";
+    advice  = "High-vol breakdown regime. PE only on score ≥7. CE signals unreliable — skip or paper trade. Strict SL.";
+    sizing  = "40% Size";
+  } else if (highVol && !bearish) {
+    regime  = "🔴 HIGH-VOL CHOPPY";
+    color   = "#ef4444";
+    bg      = "rgba(239,68,68,0.07)";
+    advice  = "High vol + no clear direction = dangerous for option buyers. Best action: sit out. If trading, ATM only, smallest size, score ≥8.";
+    sizing  = "Sit Out / 25%";
+  } else if (expOpts) {
+    regime  = "🟠 HIGH IVR — MEAN REVERT RISK";
+    color   = "#f97316";
+    bg      = "rgba(249,115,22,0.07)";
+    advice  = "Options expensive (IVR > 60%). Premium will decay fast even if direction correct. Reduce size heavily or wait for IV to cool.";
+    sizing  = "50% Size";
+  } else {
+    regime  = "⚪ NEUTRAL";
+    color   = "#94a3b8";
+    bg      = "rgba(148,163,184,0.05)";
+    advice  = "No dominant regime. Apply normal filters and use score as primary guide.";
+    sizing  = "Normal Size";
+  }
+
+  return { regime, color, bg, advice, sizing };
+}
+
+function renderRegime(r) {
+  const banner = document.getElementById("regimeBanner");
+  const label  = document.getElementById("regimeLabel");
+  const desc   = document.getElementById("regimeDesc");
+  const siz    = document.getElementById("regimeSizing");
+  if (!banner) return;
+  banner.style.background = r.bg;
+  banner.style.borderBottom = `1px solid ${r.color}33`;
+  label.textContent  = r.regime;
+  label.style.color  = r.color;
+  desc.textContent   = r.advice;
+  siz.textContent    = r.sizing;
+  siz.style.color    = r.color;
+  siz.style.borderColor = r.color + "44";
+  siz.style.background  = r.color + "11";
+  // Also update inputs panel
+  const siR = document.getElementById("si-regime");
+  if (siR) { siR.textContent = r.regime; siR.style.color = r.color; }
+}
+
+/* ─── SUPPORT / RESISTANCE ENGINE ─── */
+// Computes key levels from Nifty's 1-month daily OHLC + round numbers
+let cachedSRLevels = null;
+let cachedSRSpot   = 0;
+
+async function computeSRLevels(spot) {
+  // Only recompute if spot moved >0.5% or not yet computed
+  if (cachedSRLevels && Math.abs(spot - cachedSRSpot) / cachedSRSpot < 0.005) {
+    return cachedSRLevels;
+  }
+
+  const levels = [];
+
+  // 1. Round numbers (psychological levels) — every 500 pts
+  const base500 = Math.round(spot / 500) * 500;
+  [-1000, -500, 0, 500, 1000].forEach(offset => {
+    const lvl = base500 + offset;
+    if (lvl > spot * 0.93 && lvl < spot * 1.07) {
+      levels.push({ price: lvl, type: "round", label: `${lvl} (round)`, strength: 1 });
+    }
+  });
+
+  // 2. Round numbers — every 100 pts
+  const base100 = Math.round(spot / 100) * 100;
+  [-300, -200, -100, 0, 100, 200, 300].forEach(offset => {
+    const lvl = base100 + offset;
+    if (lvl > spot * 0.97 && lvl < spot * 1.03 && lvl % 500 !== 0) {
+      levels.push({ price: lvl, type: "round100", label: `${lvl}`, strength: 0.5 });
+    }
+  });
+
+  // 3. Recent swing highs/lows from 1-month daily data
+  try {
+    const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=1mo&interval=1d"));
+    const d = await r.json();
+    const q  = d.chart.result[0].indicators.quote[0];
+    const highs = q.high.filter(v => v != null);
+    const lows  = q.low.filter(v => v != null);
+    const closes = q.close.filter(v => v != null);
+
+    // Swing highs — local max within ±3 days
+    highs.forEach((h, i) => {
+      if (i < 2 || i > highs.length - 3) return;
+      if (h > highs[i-1] && h > highs[i-2] && h > highs[i+1] && h > highs[i+2]) {
+        const rounded = Math.round(h / 50) * 50;
+        levels.push({ price: rounded, type: "swing-high", label: `${rounded} (swing H)`, strength: 2 });
+      }
+    });
+
+    // Swing lows
+    lows.forEach((l, i) => {
+      if (i < 2 || i > lows.length - 3) return;
+      if (l < lows[i-1] && l < lows[i-2] && l < lows[i+1] && l < lows[i+2]) {
+        const rounded = Math.round(l / 50) * 50;
+        levels.push({ price: rounded, type: "swing-low", label: `${rounded} (swing L)`, strength: 2 });
+      }
+    });
+
+    // Recent high/low (last 5 days)
+    const recentHighs = highs.slice(-5);
+    const recentLows  = lows.slice(-5);
+    const wkHigh = Math.round(Math.max(...recentHighs) / 50) * 50;
+    const wkLow  = Math.round(Math.min(...recentLows)  / 50) * 50;
+    levels.push({ price: wkHigh, type: "week-high", label: `${wkHigh} (5d High)`, strength: 1.5 });
+    levels.push({ price: wkLow,  type: "week-low",  label: `${wkLow} (5d Low)`,  strength: 1.5 });
+
+    // Previous day high/low (opening range)
+    const prevHigh = Math.round(highs[highs.length-2] / 50) * 50;
+    const prevLow  = Math.round(lows[lows.length-2]   / 50) * 50;
+    levels.push({ price: prevHigh, type: "prev-high", label: `${prevHigh} (Prev H)`, strength: 1.5 });
+    levels.push({ price: prevLow,  type: "prev-low",  label: `${prevLow} (Prev L)`,  strength: 1.5 });
+
+  } catch {}
+
+  // Deduplicate levels within 25 pts of each other
+  const merged = [];
+  levels.sort((a, b) => a.price - b.price);
+  for (const lv of levels) {
+    const exists = merged.find(m => Math.abs(m.price - lv.price) <= 25);
+    if (exists) { exists.strength += lv.strength; exists.label += " / " + lv.label.split(" (")[1]?.replace(")", "") || ""; }
+    else merged.push({ ...lv });
+  }
+
+  cachedSRLevels = merged.sort((a, b) => b.strength - a.strength);
+  cachedSRSpot   = spot;
+  return cachedSRLevels;
+}
+
+function getSRContext(spot, levels) {
+  // Find the closest level above and below spot
+  const above = levels.filter(l => l.price > spot).sort((a, b) => a.price - b.price)[0];
+  const below = levels.filter(l => l.price < spot).sort((a, b) => b.price - a.price)[0];
+
+  const distAbove = above ? ((above.price - spot) / spot * 100) : 999;
+  const distBelow = below ? ((spot - below.price) / spot * 100) : 999;
+  const nearestDist = Math.min(distAbove, distBelow);
+  const nearestLevel = distAbove < distBelow ? above : below;
+  const nearestSide  = distAbove < distBelow ? "resistance" : "support";
+
+  // Proximity warning thresholds
+  let proximityWarn = null;
+  let srScorePenalty = 0;
+  if (nearestDist <= 0.2) {
+    proximityWarn = { text: `⛔ AT key ${nearestSide} ${nearestLevel?.price} — very high reversal risk, skip or wait for break/bounce`, color: "#ef4444" };
+    srScorePenalty = -2;
+  } else if (nearestDist <= 0.4) {
+    proximityWarn = { text: `⚠ Near ${nearestSide} ${nearestLevel?.price} (${nearestDist.toFixed(2)}% away) — reduce size, watch for rejection`, color: "#f97316" };
+    srScorePenalty = -1;
+  } else if (nearestDist <= 0.7) {
+    proximityWarn = { text: `📍 Approaching ${nearestSide} ${nearestLevel?.price} (${nearestDist.toFixed(2)}% away) — be aware`, color: "#f59e0b" };
+    srScorePenalty = 0;
+  }
+
+  return { above, below, distAbove, distBelow, nearestLevel, nearestSide, nearestDist, proximityWarn, srScorePenalty };
+}
+
+function renderSRLevels(levels, spot, srCtx) {
+  const container = document.getElementById("srLevels");
+  const warn      = document.getElementById("srProximityWarn");
+  if (!container) return;
+
+  // Show closest 6 levels with colour coding
+  const nearby = levels
+    .filter(l => Math.abs(l.price - spot) / spot < 0.05) // within 5%
+    .sort((a, b) => Math.abs(a.price - spot) - Math.abs(b.price - spot))
+    .slice(0, 6);
+
+  container.innerHTML = nearby.map(l => {
+    const dist    = ((l.price - spot) / spot * 100);
+    const isAbove = l.price > spot;
+    const col     = isAbove ? "#ef4444" : "#22c55e";
+    const near    = Math.abs(dist) <= 0.3;
+    return `<span style="font-size:0.68rem;padding:2px 7px;border-radius:4px;
+      background:${col}${near ? "22" : "11"};
+      border:1px solid ${col}${near ? "55" : "33"};
+      color:${col};font-weight:${near ? "700" : "500"}">
+      ${l.price} <span style="opacity:0.7">${isAbove ? "▲" : "▼"}${Math.abs(dist).toFixed(2)}%</span>
+    </span>`;
+  }).join("");
+
+  if (srCtx.proximityWarn) {
+    warn.style.display = "block";
+    warn.innerHTML = `<span style="color:${srCtx.proximityWarn.color};font-size:0.7rem;font-weight:600">${srCtx.proximityWarn.text}</span>`;
+  } else {
+    warn.style.display = "none";
+  }
+
+  // Update inputs panel
+  const siSR = document.getElementById("si-sr");
+  const siSRD = document.getElementById("si-srdist");
+  if (siSR && srCtx.nearestLevel) {
+    siSR.textContent = `${srCtx.nearestLevel.price} (${srCtx.nearestSide})`;
+    siSR.style.color = srCtx.nearestSide === "resistance" ? "#ef4444" : "#22c55e";
+  }
+  if (siSRD) {
+    siSRD.textContent = `${srCtx.nearestDist.toFixed(2)}% ${srCtx.proximityWarn ? "⚠" : "✓"}`;
+    siSRD.style.color = srCtx.nearestDist <= 0.3 ? "#ef4444" : srCtx.nearestDist <= 0.7 ? "#f59e0b" : "#22c55e";
+  }
+}
+
+// Core signal logic — v2 with corrected factors
+function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty }) {
   const dayChgPct = ((spot - prevClose) / prevClose * 100);
   const atm = getATM(spot);
 
-  // Score each indicator — positive = bullish, negative = bearish
   let score = 0;
   const reasons = [];
+  const warnings = []; // non-scoring flags shown separately
+  const flags   = []; // hard filters that affect trade sizing
 
-  // 1. PCR
-  if (pcr >= 1.2) { score += 2; reasons.push(`PCR ${pcr.toFixed(2)} (high puts = bullish contrarian)`); }
-  else if (pcr >= 1.0) { score += 1; reasons.push(`PCR ${pcr.toFixed(2)} (slightly bullish)`); }
-  else if (pcr <= 0.8) { score -= 2; reasons.push(`PCR ${pcr.toFixed(2)} (high calls = bearish contrarian)`); }
-  else if (pcr < 1.0) { score -= 1; reasons.push(`PCR ${pcr.toFixed(2)} (slightly bearish)`); }
+  // ── HARD FILTER 1: IV RANK / PERCENTILE ──────────────────────────────
+  // IVR < 40% = options cheap = GOOD for buyers (pay less premium)
+  // IVR 40–60% = neutral, proceed with caution
+  // IVR > 60% = options expensive = BAD for buyers (overpaying for premium)
+  // IVR > 80% = do not buy options (premium will crush you on mean reversion)
+  let ivrFlag = "ok", ivrNote = "";
+  if (ivRank <= 20)       { ivrFlag = "great";  ivrNote = `IVR ${ivRank}% — Options cheap, great for buying`; score += 1; reasons.push(ivrNote); }
+  else if (ivRank <= 40)  { ivrFlag = "good";   ivrNote = `IVR ${ivRank}% — Options reasonably priced`; reasons.push(ivrNote); }
+  else if (ivRank <= 60)  { ivrFlag = "caution";ivrNote = `IVR ${ivRank}% — Options moderately expensive, reduce size`; warnings.push(ivrNote); }
+  else if (ivRank <= 80)  { ivrFlag = "bad";    ivrNote = `IVR ${ivRank}% — Options expensive, avoid buying`; score -= 1; warnings.push(ivrNote); flags.push("⚠ HIGH IVR: Reduce size by 50%"); }
+  else                    { ivrFlag = "avoid";  ivrNote = `IVR ${ivRank}% — Do NOT buy options — premium will decay fast`; score -= 2; warnings.push(ivrNote); flags.push("🚫 IVR > 80%: Skip — premium too expensive"); }
 
-  // 2. VIX
-  if (vix > 20) { score -= 1; reasons.push(`VIX ${vix.toFixed(1)} > 20 (high risk — reduce size)`); }
-  else if (vix > 16) { reasons.push(`VIX ${vix.toFixed(1)} elevated (caution)`); }
-  else if (vix < 12) { score += 1; reasons.push(`VIX ${vix.toFixed(1)} low (calm market)`); }
-  else { reasons.push(`VIX ${vix.toFixed(1)} normal range`); }
+  // ── HARD FILTER 2: GAP SIZE ───────────────────────────────────────────
+  // Large gap = most of the move already happened, late entry risk
+  const absGap = Math.abs(gapPct);
+  let gapFlag = "ok";
+  if (absGap >= 1.5)      { gapFlag = "large";  warnings.push(`Gap ${gapPct > 0 ? "+" : ""}${gapPct.toFixed(2)}% — Large gap, most move done, skip or wait for retest`); score -= 1; flags.push(`⚠ Gap ${gapPct.toFixed(2)}%: Wait for retest before entry`); }
+  else if (absGap >= 0.8) { gapFlag = "medium"; warnings.push(`Gap ${gapPct > 0 ? "+" : ""}${gapPct.toFixed(2)}% — Moderate gap, reduce size by 30%`); flags.push(`⚠ Gap ${gapPct.toFixed(2)}%: Reduce size 30%`); }
+  else                    { reasons.push(`Gap ${gapPct > 0 ? "+" : ""}${gapPct.toFixed(2)}% — Normal, no gap concern`); }
 
-  // 3. SMR
-  if (smr >= 60) { score += 2; reasons.push(`SMR ${smr} ≥ 60 (bounce signal)`); }
-  else if (smr <= 20) { score -= 2; reasons.push(`SMR ${smr} ≤ 20 (fall signal)`); }
-  else { reasons.push(`SMR ${smr} neutral zone`); }
+  // ── FACTOR 1: VIX REGIME ──────────────────────────────────────────────
+  // VIX is a regime indicator — it affects sizing and direction bias
+  // High VIX (>22) = favor PE on breakdowns only, not CE
+  // NOTE: VIX is NOT used as PCR proxy anymore — it's standalone regime
+  if (vix >= 22)       { score -= 1; warnings.push(`VIX ${vix.toFixed(1)} ≥ 22 — High vol regime: favor PE on breakdowns, stay selective`); flags.push(`🔴 VIX ${vix.toFixed(1)}: High risk — PE bias only or sit out`); }
+  else if (vix >= 18)  { warnings.push(`VIX ${vix.toFixed(1)} elevated — reduce size, be selective`); }
+  else if (vix >= 14)  { reasons.push(`VIX ${vix.toFixed(1)} normal range`); }
+  else if (vix < 14)   { score += 1; reasons.push(`VIX ${vix.toFixed(1)} low — calm regime, options cheap`); }
 
-  // 4. Advance/Decline breadth
-  if (breadthPct >= 65) { score += 2; reasons.push(`Breadth ${breadthPct}% bullish (strong A/D)`); }
+  // ── FACTOR 2: VIX PERCENTILE (IVR context) ──────────────────────────
+  // Where is current VIX vs its 52w range — separate from absolute VIX
+  if (vixPercentile <= 25)     { score += 1; reasons.push(`VIX percentile ${vixPercentile}% — near 52w low, calm`); }
+  else if (vixPercentile >= 75) { score -= 1; reasons.push(`VIX percentile ${vixPercentile}% — near 52w high, caution`); }
+  else                          { reasons.push(`VIX percentile ${vixPercentile}% — mid-range`); }
+
+  // ── FACTOR 3: A/D BREADTH (independent, non-PCR) ─────────────────────
+  // Breadth is genuinely independent of PCR — broad market participation
+  if (breadthPct >= 65)      { score += 2; reasons.push(`Breadth ${breadthPct}% advancing (strong broad buying)`); }
   else if (breadthPct >= 55) { score += 1; reasons.push(`Breadth ${breadthPct}% mildly bullish`); }
-  else if (breadthPct <= 35) { score -= 2; reasons.push(`Breadth ${breadthPct}% bearish (weak A/D)`); }
+  else if (breadthPct <= 35) { score -= 2; reasons.push(`Breadth ${breadthPct}% declining (broad selling)`); }
   else if (breadthPct <= 45) { score -= 1; reasons.push(`Breadth ${breadthPct}% mildly bearish`); }
-  else { reasons.push(`Breadth ${breadthPct}% neutral`); }
+  else                       { reasons.push(`Breadth ${breadthPct}% neutral`); }
 
-  // 5. Nifty spot vs prev close
-  if (dayChgPct > 0.5) { score += 1; reasons.push(`Nifty up ${dayChgPct.toFixed(2)}% (positive momentum)`); }
-  else if (dayChgPct < -0.5) { score -= 1; reasons.push(`Nifty down ${Math.abs(dayChgPct).toFixed(2)}% (negative momentum)`); }
-  else { reasons.push(`Nifty flat (${dayChgPct.toFixed(2)}%)`); }
+  // ── FACTOR 4: MOMENTUM (spot vs prev close) ───────────────────────────
+  // Adjusted for gap: if gap is large, momentum is already captured in gap
+  const momentumChg = absGap >= 0.8 ? 0 : dayChgPct; // don't double-count gap days
+  if (momentumChg > 0.5)      { score += 1; reasons.push(`Intraday momentum +${momentumChg.toFixed(2)}%`); }
+  else if (momentumChg < -0.5){ score -= 1; reasons.push(`Intraday momentum ${momentumChg.toFixed(2)}%`); }
+  else                         { reasons.push(`Momentum flat (${dayChgPct.toFixed(2)}%)`); }
 
-  // Determine direction & confidence
+  // ── FACTOR 5: PCR NOTE (labeled honestly) ────────────────────────────
+  // PCR is VIX-derived proxy — treated as WEAK signal, max ±1 pt
+  // Clearly labeled so user knows it's an approximation
+  const pcrNote = "(⚠ VIX-proxy, not real OI)";
+  if (pcr >= 1.2)      { score += 1; reasons.push(`PCR ~${pcr.toFixed(2)} ${pcrNote} — high put activity proxy`); }
+  else if (pcr <= 0.8) { score -= 1; reasons.push(`PCR ~${pcr.toFixed(2)} ${pcrNote} — high call activity proxy`); }
+  else                 { reasons.push(`PCR ~${pcr.toFixed(2)} ${pcrNote} — neutral`); }
+
+  // ── SMR REMOVED as separate factor ───────────────────────────────────
+  // SMR was just a remapped PCR (0–100 scale) = duplicating PCR weight
+  // It is now shown as UI only (not scored) with honest labeling
+
+  // ── REGIME ADVICE ─────────────────────────────────────────────────────
+  const highVolRegime = vix >= 22;
+  if (highVolRegime && score > 0) {
+    warnings.push(`High-vol regime (VIX ${vix.toFixed(1)}): CE signals less reliable. Prefer PE on confirmed breakdown or sit out.`);
+  }
+
+  // ── S/R CONTEXT PENALTY ───────────────────────────────────────────────
+  if (srScorePenalty && srScorePenalty < 0) {
+    score += srScorePenalty;
+    reasons.push(`S/R proximity reduces conviction (${srScorePenalty} pts)`);
+  }
+
+  // ── DIRECTION ─────────────────────────────────────────────────────────
   let direction, type, confidence, confClass, cardClass, emoji;
-  const absScore = Math.abs(score);
 
-  if (score >= 4) { direction = "BUY CE"; type = "CE"; confidence = "HIGH"; confClass = "conf-high"; cardClass = "bullish"; emoji = "📈"; }
-  else if (score >= 2) { direction = "BUY CE"; type = "CE"; confidence = "MEDIUM"; confClass = "conf-medium"; cardClass = "bullish"; emoji = "📈"; }
-  else if (score <= -4) { direction = "BUY PE"; type = "PE"; confidence = "HIGH"; confClass = "conf-high"; cardClass = "bearish"; emoji = "📉"; }
-  else if (score <= -2) { direction = "BUY PE"; type = "PE"; confidence = "MEDIUM"; confClass = "conf-medium"; cardClass = "bearish"; emoji = "📉"; }
-  else { direction = "SIDEWAYS"; type = null; confidence = "LOW"; confClass = "conf-low"; cardClass = "sideways"; emoji = "⚠️"; }
+  // In high-vol regime, require higher score threshold for CE
+  const ceThreshold = highVolRegime ? 5 : 4;  // harder to get CE in high vol
+  const peThreshold = 4;                        // PE easier in high vol (bearish bias)
 
-  // High VIX override
-  const highRisk = vix > 20;
-  if (highRisk) { cardClass = "danger"; confidence = confidence === "HIGH" ? "MEDIUM" : "LOW"; }
+  if (score >= ceThreshold)      { direction = "BUY CE"; type = "CE"; confidence = "HIGH";   confClass = "conf-high";   cardClass = "bullish"; emoji = "📈"; }
+  else if (score >= 2)           { direction = "BUY CE"; type = "CE"; confidence = "MEDIUM"; confClass = "conf-medium"; cardClass = "bullish"; emoji = "📈"; }
+  else if (score <= -peThreshold){ direction = "BUY PE"; type = "PE"; confidence = "HIGH";   confClass = "conf-high";   cardClass = "bearish"; emoji = "📉"; }
+  else if (score <= -2)          { direction = "BUY PE"; type = "PE"; confidence = "MEDIUM"; confClass = "conf-medium"; cardClass = "bearish"; emoji = "📉"; }
+  else                           { direction = "SIDEWAYS"; type = null; confidence = "LOW";  confClass = "conf-low";    cardClass = "sideways"; emoji = "⚠️"; }
+
+  // IVR > 80 or large gap = force SIDEWAYS regardless
+  if (ivrFlag === "avoid" || gapFlag === "large") {
+    direction = "SKIP"; type = null; confidence = "LOW"; confClass = "conf-low"; cardClass = "sideways"; emoji = "🚫";
+  }
+
+  const highRisk = vix > 20 || ivrFlag === "bad" || ivrFlag === "avoid";
+  if (highRisk && cardClass !== "sideways") {
+    cardClass = "danger";
+    confidence = confidence === "HIGH" ? "MEDIUM" : "LOW";
+  }
 
   // ── EXPIRY & DTE — declared here so all blocks below can use them ──
   const expiry = getTargetExpiry();
@@ -2625,7 +2959,7 @@ function computeSignal({ spot, prevClose, vix, pcr, smr, adRatio, breadthPct }) 
     sl = "🛑 Stay out — low conviction";
   }
 
-  return { direction, type, confidence, confClass, cardClass, emoji, strikeName, t1, t2, t3, sl, reasons, score, highRisk, atm, expiry, primaryStrike, canConsiderOTM, strongConviction };
+  return { direction, type, confidence, confClass, cardClass, emoji, strikeName, t1, t2, t3, sl, reasons, warnings, flags, score, highRisk, atm, expiry, primaryStrike, canConsiderOTM, strongConviction, ivrFlag, gapFlag, highVolRegime };
 }
 
 /* ─── PROBABILITY SCORE (0–10) ─── */
@@ -2677,64 +3011,68 @@ function calcOptionEntry(spot, strike, type, dte, vix) {
 }
 
 function computeProbabilityScore(sig, inputs) {
-  // Each factor contributes up to 2 points → max raw = 10
-  // Then we map to 0–10 with penalties
-
   let raw = 0;
-  const breakdown = []; // { label, pts, cls }
+  const breakdown = [];
 
-  // 1. Raw signal score alignment (0–2 pts)
+  // 1. Signal score strength (0–2 pts)
   const absScore = Math.abs(sig.score);
   const scorePts = Math.min(2, absScore / 4);
   raw += scorePts;
-  breakdown.push({ label: `Signal ${absScore >= 4 ? "strong" : "weak"} (${sig.score > 0 ? "+" : ""}${sig.score})`, pts: scorePts, cls: scorePts >= 1.5 ? "pos" : scorePts >= 0.8 ? "neu" : "neg" });
+  breakdown.push({ label: `Signal (${sig.score > 0 ? "+" : ""}${sig.score})`, pts: scorePts, cls: scorePts >= 1.5 ? "pos" : scorePts >= 0.8 ? "neu" : "neg" });
 
-  // 2. PCR conviction (0–2 pts)
-  const pcrDist = Math.abs(inputs.pcr - 1.0);
-  const pcrPts  = Math.min(2, pcrDist / 0.25);
-  raw += pcrPts;
-  breakdown.push({ label: `PCR ${inputs.pcr.toFixed(2)}`, pts: pcrPts, cls: pcrDist >= 0.2 ? "pos" : pcrDist >= 0.1 ? "neu" : "neg" });
+  // 2. IV Rank — key for option buyers (0–2 pts)
+  // Low IVR = cheap options = better for buyers
+  const ivr = inputs.ivRank ?? 50;
+  let ivrPts;
+  if (ivr <= 20)      ivrPts = 2.0;
+  else if (ivr <= 40) ivrPts = 1.5;
+  else if (ivr <= 60) ivrPts = 0.5;
+  else if (ivr <= 80) ivrPts = 0;
+  else                ivrPts = 0;
+  raw += ivrPts;
+  breakdown.push({ label: `IVR ${ivr}%`, pts: ivrPts, cls: ivrPts >= 1.5 ? "pos" : ivrPts >= 0.5 ? "neu" : "neg" });
 
-  // 3. VIX environment (0–2 pts)
+  // 3. VIX regime (0–2 pts)
   let vixPts;
-  if (inputs.vix < 12)       vixPts = 2.0;
-  else if (inputs.vix < 16)  vixPts = 1.5;
-  else if (inputs.vix < 20)  vixPts = 1.0;
-  else if (inputs.vix < 25)  vixPts = 0.5;
+  if (inputs.vix < 14)       vixPts = 2.0;
+  else if (inputs.vix < 18)  vixPts = 1.5;
+  else if (inputs.vix < 22)  vixPts = 0.8;
   else                       vixPts = 0;
   raw += vixPts;
-  breakdown.push({ label: `VIX ${inputs.vix.toFixed(1)}`, pts: vixPts, cls: vixPts >= 1.5 ? "pos" : vixPts >= 0.8 ? "neu" : "neg" });
+  breakdown.push({ label: `VIX ${inputs.vix.toFixed(1)}`, pts: vixPts, cls: vixPts >= 1.5 ? "pos" : vixPts >= 0.5 ? "neu" : "neg" });
 
-  // 4. A/D breadth alignment (0–2 pts)
+  // 4. A/D breadth alignment (0–2 pts) — genuinely independent signal
   const breadthAligned = (sig.type === "CE" && inputs.breadthPct >= 55) || (sig.type === "PE" && inputs.breadthPct <= 45);
-  const breadthPts = breadthAligned
-    ? Math.min(2, Math.abs(inputs.breadthPct - 50) / 12.5)
-    : 0;
+  const breadthPts = breadthAligned ? Math.min(2, Math.abs(inputs.breadthPct - 50) / 12.5) : 0;
   raw += breadthPts;
   breakdown.push({ label: `Breadth ${inputs.breadthPct}%`, pts: breadthPts, cls: breadthPts >= 1.5 ? "pos" : breadthPts >= 0.6 ? "neu" : "neg" });
 
-  // 5. SMR alignment (0–2 pts)
-  const smrAligned = (sig.type === "CE" && inputs.smr >= 50) || (sig.type === "PE" && inputs.smr <= 50);
-  const smrExtreme = inputs.smr >= 60 || inputs.smr <= 20;
-  const smrPts = smrAligned ? (smrExtreme ? 2.0 : 1.0) : 0;
-  raw += smrPts;
-  breakdown.push({ label: `SMR ${inputs.smr}`, pts: smrPts, cls: smrPts >= 1.5 ? "pos" : smrPts >= 0.8 ? "neu" : "neg" });
+  // 5. Gap filter — replaces SMR (which was PCR duplicate)
+  // No/small gap = full points. Large gap = penalty
+  const absGap = Math.abs(inputs.gapPct || 0);
+  let gapPts;
+  if (absGap < 0.5)       gapPts = 2.0;
+  else if (absGap < 0.8)  gapPts = 1.5;
+  else if (absGap < 1.5)  gapPts = 0.5;
+  else                    gapPts = 0;
+  raw += gapPts;
+  breakdown.push({ label: `Gap ${(inputs.gapPct||0) >= 0 ? "+" : ""}${(inputs.gapPct||0).toFixed(2)}%`, pts: gapPts, cls: gapPts >= 1.5 ? "pos" : gapPts >= 0.5 ? "neu" : "neg" });
 
-  // Scale raw (0–10) to final score
   let finalScore = Math.round(Math.min(10, raw));
 
   // Penalties
-  if (sig.highRisk)           finalScore = Math.max(0, finalScore - 2); // VIX > 20
-  if (inputs.dte <= 1)        finalScore = Math.max(0, finalScore - 1); // expiry day
-  if (sig.direction === "SIDEWAYS") finalScore = Math.min(3, finalScore);
+  if (sig.highRisk)                         finalScore = Math.max(0, finalScore - 2);
+  if (inputs.dte <= 1)                      finalScore = Math.max(0, finalScore - 1);
+  if (sig.direction === "SIDEWAYS" || sig.direction === "SKIP") finalScore = Math.min(2, finalScore);
+  if (ivr > 80)                             finalScore = Math.max(0, finalScore - 3); // never trade IVR > 80
+  if (absGap >= 1.5)                        finalScore = Math.max(0, finalScore - 2); // large gap = low prob
 
-  // Label
   let label, color;
-  if (finalScore >= 8)      { label = "Very High Probability — Strong Setup";  color = "#22c55e"; }
-  else if (finalScore >= 6) { label = "Good Setup — Worth Considering";         color = "#84cc16"; }
-  else if (finalScore >= 4) { label = "Moderate — Watch Carefully";             color = "#f59e0b"; }
-  else if (finalScore >= 2) { label = "Weak Setup — Skip or Very Small Size";   color = "#f97316"; }
-  else                      { label = "Very Low — Do Not Trade";                color = "#ef4444"; }
+  if (finalScore >= 8)      { label = "Very High Probability — Strong Setup";    color = "#22c55e"; }
+  else if (finalScore >= 6) { label = "Good Setup — Worth Considering";           color = "#84cc16"; }
+  else if (finalScore >= 4) { label = "Moderate — Small Size Only";               color = "#f59e0b"; }
+  else if (finalScore >= 2) { label = "Weak — Skip or Paper Trade Only";          color = "#f97316"; }
+  else                      { label = "Very Low — Do Not Trade";                  color = "#ef4444"; }
 
   return { score: finalScore, label, color, breakdown };
 }
@@ -2820,18 +3158,36 @@ function renderSignal(sig, inputs) {
     return `<span style="font-size:0.7rem;color:var(--muted2)">${l}</span>`;
   }).join("<br>");
 
-  document.getElementById("sigReason").innerHTML = "<strong>Why:</strong> " + sig.reasons.map(r => `<span style='color:var(--muted2)'>• ${r}</span>`).join(" ");
+  // Reasons, warnings, flags
+  let reasonHTML = "<div style='margin-bottom:6px'><strong>Factors scored:</strong> " +
+    sig.reasons.map(r => `<span style='color:var(--muted2)'>• ${r}</span>`).join(" ") + "</div>";
+  if (sig.warnings?.length) {
+    reasonHTML += "<div style='margin-bottom:4px;color:#f59e0b'><strong>⚠ Warnings:</strong> " +
+      sig.warnings.map(w => `• ${w}`).join(" ") + "</div>";
+  }
+  if (sig.flags?.length) {
+    reasonHTML += "<div style='padding:6px 8px;background:rgba(239,68,68,0.08);border-radius:6px;border-left:2px solid #ef4444;font-size:0.68rem'>" +
+      sig.flags.map(f => `<div style='color:#ef4444'>${f}</div>`).join("") + "</div>";
+  }
+  // SMR label clarification
+  reasonHTML += `<div style='margin-top:6px;font-size:0.65rem;color:var(--muted);border-top:1px solid var(--border);padding-top:5px'>
+    ℹ SMR shown as UI indicator only (not scored) — it mirrors PCR and would duplicate sentiment weighting.<br>
+    ℹ PCR marked as VIX-proxy (⚠) — not real NSE OI. Treat as weak signal only.
+  </div>`;
+  document.getElementById("sigReason").innerHTML = reasonHTML;
 
   // Update signal inputs panel
   const chgColor = inputs.dayChg >= 0 ? "#22c55e" : "#ef4444";
+  const gapColor = Math.abs(inputs.gapPct||0) >= 1.5 ? "#ef4444" : Math.abs(inputs.gapPct||0) >= 0.8 ? "#f59e0b" : "#22c55e";
   document.getElementById("si-spot").textContent    = "₹" + inputs.spot.toFixed(2);
   document.getElementById("si-prev").textContent    = "₹" + inputs.prevClose.toFixed(2);
   document.getElementById("si-chg").innerHTML       = `<span style="color:${chgColor}">${inputs.dayChg >= 0 ? "▲" : "▼"} ${Math.abs(inputs.dayChg).toFixed(2)} (${Math.abs(inputs.dayChgPct).toFixed(2)}%)</span>`;
+  document.getElementById("si-gap").innerHTML       = `<span style="color:${gapColor}">${(inputs.gapPct||0) >= 0 ? "+" : ""}${(inputs.gapPct||0).toFixed(2)}% ${Math.abs(inputs.gapPct||0) >= 0.8 ? "⚠" : "✓"}</span>`;
   document.getElementById("si-vix").textContent     = inputs.vix.toFixed(2);
-  document.getElementById("si-vix").style.color     = inputs.vix > 20 ? "#ef4444" : inputs.vix > 16 ? "#f59e0b" : "#22c55e";
-  document.getElementById("si-pcr").textContent     = inputs.pcr.toFixed(2);
-  document.getElementById("si-smr").textContent     = inputs.smr + " / 100";
-  document.getElementById("si-smr").style.color     = inputs.smr >= 60 ? "#22c55e" : inputs.smr <= 20 ? "#ef4444" : "#f59e0b";
+  document.getElementById("si-vix").style.color     = inputs.vix >= 22 ? "#ef4444" : inputs.vix >= 18 ? "#f59e0b" : "#22c55e";
+  document.getElementById("si-vixpct").textContent  = (inputs.vixPercentile||50) + "th percentile";
+  document.getElementById("si-vixpct").style.color  = (inputs.vixPercentile||50) >= 75 ? "#ef4444" : (inputs.vixPercentile||50) <= 25 ? "#22c55e" : "#f59e0b";
+  document.getElementById("si-pcr").innerHTML       = `${inputs.pcr.toFixed(2)} <small style="color:var(--muted)">(VIX proxy ⚠)</small>`;
   document.getElementById("si-ad").textContent      = inputs.adRatio;
   document.getElementById("si-breadth").textContent = inputs.breadthPct + "% bullish";
   document.getElementById("si-breadth").style.color = inputs.breadthPct >= 60 ? "#22c55e" : inputs.breadthPct <= 40 ? "#ef4444" : "#f59e0b";
@@ -2924,8 +3280,6 @@ async function runSignalEngine(force = false) {
     const spot      = parseFloat(spotText) || 0;
     const pcrText   = document.getElementById("pcrValue")?.textContent;
     const pcr       = parseFloat(pcrText) || 1.0;
-    const smrText   = document.getElementById("si-smr")?.textContent || "50";
-    const smr       = parseInt(smrText) || 50;
     const vixText   = document.getElementById("idx-vix")?.textContent;
     const vix       = parseFloat(vixText) || 15;
     const adRatioTx = document.getElementById("adRatio")?.textContent || "1.0";
@@ -2934,17 +3288,54 @@ async function runSignalEngine(force = false) {
     const breadthPct= parseInt(breadthTx) || 50;
 
     // Get prevClose via fresh fetch
-    let prevClose = spot; // fallback
+    let prevClose = spot;
+    let vix52wHigh = vix * 1.5, vix52wLow = vix * 0.6; // fallback estimates
     try {
-      const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI"));
+      const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=1d&interval=1m"));
       const d = await r.json();
-      prevClose = d.chart.result[0].meta.previousClose;
+      prevClose = d.chart.result[0].meta.previousClose || spot;
+    } catch {}
+
+    // Compute gap (open vs prev close)
+    // Use day's first available price vs prevClose as gap proxy
+    const gapPct = prevClose > 0 ? ((spot - prevClose) / prevClose * 100) : 0;
+    // At 10:30+ the intraday move includes gap — subtract to isolate gap
+    // Best approximation: use dayChgPct at open (prevClose → first candle open)
+    // We use spot vs prevClose as combined gap+move (acceptable proxy)
+
+    // VIX 52-week percentile — fetch VIX 1y data to compute
+    let vixPercentile = 50; // neutral default
+    let ivRank = 50;        // IVR default
+    try {
+      const rv = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/INDIAVIX.NS?range=1y&interval=1d"));
+      const dv = await rv.json();
+      const vixCloses = dv.chart.result[0].indicators.quote[0].close.filter(v => v != null);
+      if (vixCloses.length > 20) {
+        vix52wHigh = Math.max(...vixCloses);
+        vix52wLow  = Math.min(...vixCloses);
+        // IV Rank = (current - 52w low) / (52w high - 52w low) × 100
+        ivRank = Math.round((vix - vix52wLow) / (vix52wHigh - vix52wLow) * 100);
+        ivRank = Math.min(100, Math.max(0, ivRank));
+        // VIX percentile = % of days VIX was below current
+        vixPercentile = Math.round(vixCloses.filter(v => v < vix).length / vixCloses.length * 100);
+        // Update UI
+        document.getElementById("si-smr").textContent = `IVR ${ivRank}%`;
+        document.getElementById("si-smr").style.color = ivRank <= 40 ? "#22c55e" : ivRank <= 60 ? "#f59e0b" : "#ef4444";
+      }
     } catch {}
 
     const dayChg    = spot - prevClose;
     const dayChgPct = prevClose > 0 ? (dayChg / prevClose * 100) : 0;
 
-    const inputs = { spot, prevClose, dayChg, dayChgPct, vix, pcr, smr, adRatio, breadthPct };
+    // Compute S/R levels and regime
+    const srLevels  = await computeSRLevels(spot);
+    const srCtx     = getSRContext(spot, srLevels);
+    renderSRLevels(srLevels, spot, srCtx);
+
+    const regime    = classifyRegime(vix, ivRank, vixPercentile, dayChgPct, breadthPct);
+    renderRegime(regime);
+
+    const inputs = { spot, prevClose, dayChg, dayChgPct, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty: srCtx.srScorePenalty };
     const sig = computeSignal(inputs);
     renderSignal(sig, inputs);
 

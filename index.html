@@ -107,24 +107,41 @@ body {
   border-radius: 10px;
   overflow: hidden;
   margin-bottom: 16px;
-  padding: 10px 0;
+  padding: 10px 14px;
 }
-.ticker {
-  white-space: nowrap;
-  display: inline-block;
-  animation: scroll 30s linear infinite;
-  padding-left: 100%;
+.ticker-grid {
+  display: grid;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 4px;
 }
-.ticker-wrapper:hover .ticker { animation-play-state: paused; }
-@keyframes scroll {
-  0% { transform: translateX(0); }
-  100% { transform: translateX(-100%); }
+@media (max-width: 900px)  { .ticker-grid { grid-template-columns: repeat(5, 1fr); } }
+@media (max-width: 500px)  { .ticker-grid { grid-template-columns: repeat(3, 1fr); } }
+.ticker-cell {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 5px 8px;
+  font-size: 0.72rem;
+  line-height: 1.4;
+  transition: opacity 0.3s;
 }
-.ticker span {
-  margin-right: 40px;
-  font-size: 0.82rem;
-  font-weight: 600;
+.ticker-cell .tc-name { font-weight: 700; color: var(--text); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.ticker-cell .tc-price { font-size: 0.68rem; }
+.ticker-cell .tc-chg   { font-size: 0.65rem; font-weight: 600; }
+.ticker-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-size: 0.68rem;
+  color: var(--muted);
 }
+.ticker-page-dots { display: flex; gap: 4px; }
+.ticker-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: var(--border2); transition: background 0.2s;
+}
+.ticker-dot.active { background: var(--accent); }
 
 /* ── SECTION LABEL ── */
 .section-label {
@@ -642,7 +659,21 @@ body {
 
 <!-- ── TICKER ── -->
 <div class="ticker-wrapper">
-  <div id="ticker" class="ticker">Loading top stocks...</div>
+  <div class="ticker-meta">
+    <span>Nifty 50 — All Stocks <span id="tickerUpdated" style="color:var(--muted)"></span></span>
+    <div style="display:flex;align-items:center;gap:10px">
+      <span id="tickerPageLabel" style="color:var(--muted2)">Page 1/5</span>
+      <div class="ticker-page-dots" id="tickerDots"></div>
+      <button onclick="tickerPrev()" style="background:var(--surface2);border:1px solid var(--border2);color:var(--muted2);padding:2px 8px;border-radius:5px;cursor:pointer;font-size:0.72rem">‹</button>
+      <button onclick="tickerNext()" style="background:var(--surface2);border:1px solid var(--border2);color:var(--muted2);padding:2px 8px;border-radius:5px;cursor:pointer;font-size:0.72rem">›</button>
+      <button id="tickerPlayBtn" onclick="toggleTickerAuto()" style="background:var(--surface2);border:1px solid var(--border2);color:var(--accent);padding:2px 8px;border-radius:5px;cursor:pointer;font-size:0.72rem">⏸</button>
+    </div>
+  </div>
+  <div class="ticker-grid" id="tickerGrid">
+    <div class="skeleton" style="height:50px;border-radius:6px"></div>
+    <div class="skeleton" style="height:50px;border-radius:6px"></div>
+    <div class="skeleton" style="height:50px;border-radius:6px"></div>
+  </div>
 </div>
 
 <!-- ── AUTO-REFRESH INDICATOR ── -->
@@ -1045,12 +1076,14 @@ async function loadIndices() {
 /* ─── GLOBAL MARKETS ─── */
 async function loadGlobal() {
   const markets = [
-    { name: "Dow Jones",  symbol: "%5EDJI" },
+    { name: "Dow Jones",  symbol: "%5EDJI"  },
     { name: "Nasdaq",     symbol: "%5EIXIC" },
     { name: "S&P 500",    symbol: "%5EGSPC" },
     { name: "FTSE 100",   symbol: "%5EFTSE" },
-    { name: "Hang Seng",  symbol: "%5EHSI" },
-    { name: "GIFT Nifty", symbol: "GC=F" }  // fallback, see GIFT panel
+    { name: "Hang Seng",  symbol: "%5EHSI"  },
+    { name: "Nikkei 225", symbol: "%5EN225" },
+    { name: "DAX",        symbol: "%5EGDAXI"},
+    { name: "SGX Nifty",  symbol: "%5ENSEI" },
   ];
   let html = "";
   for (const m of markets) {
@@ -1069,9 +1102,10 @@ async function loadGlobal() {
 /* ─── GIFT NIFTY PANEL ─── */
 async function loadGiftPanel() {
   const items = [
-    { name: "GIFT Nifty (SGX)", symbol: "%5ENSEI" }, // approximate
-    { name: "India VIX",        symbol: "INDIAVIX.NS" },
-    { name: "Nifty Next 50",    symbol: "%5ENEXT50" },
+    { name: "Nifty 50 Spot",  symbol: "%5ENSEI",      note: "Spot price (NSE)" },
+    { name: "India VIX",      symbol: "INDIAVIX.NS",  note: "" },
+    { name: "Nifty Next 50",  symbol: "%5ENEXT50",    note: "" },
+    { name: "Nifty Midcap 50",symbol: "%5ENIFTY_MIDCAP_SELECT", note: "" },
   ];
   let html = "";
   for (const item of items) {
@@ -1081,10 +1115,20 @@ async function loadGiftPanel() {
       const m = d.chart.result[0].meta;
       const p = m.regularMarketPrice, ch = p - m.previousClose, pct = (ch / m.previousClose * 100).toFixed(2);
       const color = ch >= 0 ? "#22c55e" : "#ef4444";
-      html += `<div class="data-row"><span class="label">${item.name}</span><span class="val" style="color:${color}">${p.toFixed(2)} <small>(${pct}%)</small></span></div>`;
+      html += `<div class="data-row">
+        <span class="label">${item.name}${item.note ? ` <small style="color:var(--muted);font-size:0.65rem">(${item.note})</small>` : ""}</span>
+        <span class="val" style="color:${color}">${p.toFixed(2)} <small>(${pct}%)</small></span>
+      </div>`;
     } catch {}
   }
-  // VIX interpretation
+  // GIFT Nifty note
+  html += `<div style="margin-top:10px;padding:8px 10px;background:rgba(245,158,11,0.07);border-radius:8px;border-left:3px solid var(--yellow);font-size:0.72rem;color:var(--muted2);line-height:1.6">
+    <strong style="color:var(--yellow)">⚠ GIFT Nifty Futures</strong><br>
+    True GIFT Nifty futures (traded on NSE IFSC, Singapore) are not available on Yahoo Finance. The <em>Nifty 50 Spot</em> above is shown as the closest proxy. For live GIFT Nifty futures, visit
+    <a href="https://www.nseindia.com/market-data/live-equity-market" target="_blank" style="color:var(--accent)">nseindia.com</a> or
+    <a href="https://www.investing.com/indices/nifty-50-futures" target="_blank" style="color:var(--accent)">investing.com</a>.
+  </div>`;
+  // VIX guide
   html += `<div style="margin-top:10px;padding:8px;background:var(--surface2);border-radius:8px;font-size:0.74rem;color:var(--muted2)">
     <strong style="color:var(--text)">VIX Guide:</strong><br>
     &lt;12 = Very Low Volatility &nbsp;|&nbsp; 12–16 = Normal &nbsp;|&nbsp; 16–20 = Elevated &nbsp;|&nbsp; &gt;20 = High Fear
@@ -1117,24 +1161,95 @@ async function loadCommodities() {
 }
 
 /* ─── TICKER ─── */
-const top10 = [
+/* ─── TICKER — NIFTY 50 PAGINATED GRID ─── */
+const nifty50ticker = [
   "RELIANCE.NS","TCS.NS","HDFCBANK.NS","ICICIBANK.NS","INFY.NS",
-  "HINDUNILVR.NS","ITC.NS","LT.NS","SBIN.NS","BHARTIARTL.NS"
+  "HINDUNILVR.NS","ITC.NS","LT.NS","SBIN.NS","BHARTIARTL.NS",
+  "AXISBANK.NS","KOTAKBANK.NS","ASIANPAINT.NS","MARUTI.NS","WIPRO.NS",
+  "HCLTECH.NS","TITAN.NS","NESTLEIND.NS","BAJFINANCE.NS","SUNPHARMA.NS",
+  "ONGC.NS","POWERGRID.NS","NTPC.NS","COALINDIA.NS","JSWSTEEL.NS",
+  "TATASTEEL.NS","HINDALCO.NS","BPCL.NS","GRASIM.NS","ULTRACEMCO.NS",
+  "CIPLA.NS","DRREDDY.NS","DIVISLAB.NS","EICHERMOT.NS","HEROMOTOCO.NS",
+  "BAJAJ-AUTO.NS","M&M.NS","TATACONSUM.NS","BRITANNIA.NS","APOLLOHOSP.NS",
+  "ADANIENT.NS","ADANIPORTS.NS","TATAMOTORS.NS","TECHM.NS","LTIM.NS",
+  "HDFCLIFE.NS","SBILIFE.NS","BAJAJFINSV.NS","INDUSINDBK.NS","IOC.NS"
 ];
+
+const TICKER_PAGE_SIZE = 10;
+let tickerData = [];
+let tickerPage = 0;
+let tickerAutoInterval = null;
+let tickerAutoPlay = true;
+const totalTickerPages = Math.ceil(nifty50ticker.length / TICKER_PAGE_SIZE);
+
+function renderTickerPage() {
+  const start = tickerPage * TICKER_PAGE_SIZE;
+  const slice = tickerData.slice(start, start + TICKER_PAGE_SIZE);
+  const grid = document.getElementById("tickerGrid");
+  if (!grid || !slice.length) return;
+
+  grid.innerHTML = slice.map(s => {
+    const color = s.chg >= 0 ? "#22c55e" : "#ef4444";
+    return `<div class="ticker-cell">
+      <div class="tc-name">${s.name}</div>
+      <div class="tc-price" style="color:var(--text)">₹${s.price}</div>
+      <div class="tc-chg" style="color:${color}">${s.chg >= 0 ? "▲" : "▼"} ${Math.abs(s.chgPct)}%</div>
+    </div>`;
+  }).join("");
+
+  // Update dots
+  const dots = document.getElementById("tickerDots");
+  if (dots) dots.innerHTML = Array.from({length: totalTickerPages}, (_, i) =>
+    `<div class="ticker-dot ${i === tickerPage ? "active" : ""}" onclick="goTickerPage(${i})"></div>`
+  ).join("");
+
+  const lbl = document.getElementById("tickerPageLabel");
+  if (lbl) lbl.textContent = `Page ${tickerPage + 1}/${totalTickerPages}`;
+}
+
+function tickerNext() { tickerPage = (tickerPage + 1) % totalTickerPages; renderTickerPage(); }
+function tickerPrev() { tickerPage = (tickerPage - 1 + totalTickerPages) % totalTickerPages; renderTickerPage(); }
+function goTickerPage(p) { tickerPage = p; renderTickerPage(); }
+
+function toggleTickerAuto() {
+  tickerAutoPlay = !tickerAutoPlay;
+  const btn = document.getElementById("tickerPlayBtn");
+  if (tickerAutoPlay) {
+    tickerAutoInterval = setInterval(tickerNext, 4000);
+    if (btn) { btn.textContent = "⏸"; btn.style.color = "var(--accent)"; }
+  } else {
+    clearInterval(tickerAutoInterval);
+    if (btn) { btn.textContent = "▶"; btn.style.color = "var(--muted2)"; }
+  }
+}
+
 async function loadTicker() {
-  let html = "";
-  for (const s of top10) {
+  const results = await Promise.all(nifty50ticker.map(async (s) => {
     try {
       const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/" + s));
       const d = await r.json();
       const m = d.chart.result[0].meta;
-      const p = m.regularMarketPrice, ch = p - m.previousClose, pct = (ch / m.previousClose * 100).toFixed(2);
-      const color = ch >= 0 ? "#22c55e" : "#ef4444";
-      html += `<span style="color:${color}">${s.replace(".NS","")} ₹${p.toFixed(0)} (${pct >= 0 ? "+" : ""}${pct}%)</span>`;
-    } catch {}
+      const price = m.regularMarketPrice;
+      const chg = price - m.previousClose;
+      const chgPct = parseFloat((chg / m.previousClose * 100).toFixed(2));
+      return { name: s.replace(".NS",""), price: price.toFixed(1), chg, chgPct };
+    } catch { return null; }
+  }));
+
+  tickerData = results.filter(Boolean);
+
+  const upd = document.getElementById("tickerUpdated");
+  if (upd) upd.textContent = "· " + new Date().toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour:"2-digit", minute:"2-digit" });
+
+  renderTickerPage();
+
+  // Start auto-cycle
+  if (tickerAutoPlay) {
+    clearInterval(tickerAutoInterval);
+    tickerAutoInterval = setInterval(tickerNext, 4000);
   }
-  document.getElementById("ticker").innerHTML = html || "Ticker unavailable";
 }
+
 
 /* ─── PCR INTRADAY CHART ─── */
 const pcrHistory = { labels: [], values: [], smr: [], colors: [] };
@@ -1459,20 +1574,42 @@ async function loadPCR() {
       <div class="data-row"><span class="label">SMR Score</span><span class="val" style="color:${smrCol};font-weight:700">${smr} / 100</span></div>`;
 
     updatePCRChart(pcrNum, label);
-    updateFearGreed(vix, pcrNum);
+    await updateFearGreed(vix, pcrNum);
   } catch { document.getElementById("pcrValue").textContent = "N/A"; }
 }
 
 
 /* ─── FEAR & GREED ─── */
-function updateFearGreed(vix, pcr) {
-  // Compute composite score 0–100
-  // VIX: 30+ = extreme fear (100), 10 = extreme greed (0)
+let nifty52wHigh = null; // cached from load52Week or fetched fresh
+
+async function fetchNifty52wHigh() {
+  if (nifty52wHigh) return nifty52wHigh;
+  try {
+    const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=1y&interval=1d"));
+    const d = await r.json();
+    const closes = d.chart.result[0].indicators.quote[0].close.filter(v => v != null);
+    nifty52wHigh = Math.max(...closes);
+    return nifty52wHigh;
+  } catch { return null; }
+}
+
+async function updateFearGreed(vix, pcr) {
+  // VIX score: 30+ = extreme fear (100), 10 = extreme greed (0)
   const vixScore = Math.min(100, Math.max(0, (vix - 10) / 20 * 100));
-  // PCR: 1.5 = extreme fear (100), 0.5 = extreme greed (0)
+  // PCR score: 1.5 = extreme fear (100), 0.5 = extreme greed (0)
   const pcrScore = Math.min(100, Math.max(0, (pcr - 0.5) / 1.0 * 100));
-  // Momentum (use Nifty proximity from 52w high as proxy — here simplified)
-  const momScore = 50; // neutral default
+  // Momentum: distance from 52w high → near high = greed (low score), far = fear (high score)
+  let momScore = 50;
+  try {
+    const high = await fetchNifty52wHigh();
+    if (high) {
+      const currentNifty = parseFloat(document.getElementById("price").textContent.replace("₹","").replace(",","")) || high;
+      const distPct = (high - currentNifty) / high * 100; // 0% = at high, 20% = 20% below high
+      // Map 0–20% drop → 0–100 fear score
+      momScore = Math.min(100, Math.max(0, distPct / 20 * 100));
+    }
+  } catch {}
+
   const composite = Math.round(vixScore * 0.4 + pcrScore * 0.4 + momScore * 0.2);
 
   let sentiment, color;
@@ -1487,22 +1624,18 @@ function updateFearGreed(vix, pcr) {
   document.getElementById("fgSentiment").textContent = sentiment;
   document.getElementById("fgSentiment").style.color = color;
 
-  // Animate needle: -90° = 0, +90° = 100
   const angle = -90 + composite * 1.8;
   document.getElementById("fgNeedle").setAttribute("transform", `rotate(${angle}, 90, 90)`);
 
-  // Animate arc dashoffset: full arc = 251px
   const arcLen = 251;
-  const offset = arcLen - (composite / 100) * arcLen;
-  document.getElementById("fgArc").style.strokeDashoffset = offset;
+  document.getElementById("fgArc").style.strokeDashoffset = arcLen - (composite / 100) * arcLen;
 
-  // Component bars
   document.getElementById("fgBarVix").style.width = vixScore + "%";
   document.getElementById("fgBarVix").style.background = color;
   document.getElementById("fgBarPcr").style.width = pcrScore + "%";
   document.getElementById("fgBarPcr").style.background = color;
   document.getElementById("fgBarMom").style.width = momScore + "%";
-  document.getElementById("fgBarMom").style.background = "#f59e0b";
+  document.getElementById("fgBarMom").style.background = momScore > 60 ? "#22c55e" : momScore > 30 ? "#f59e0b" : "#ef4444";
 }
 
 /* ─── ADVANCE / DECLINE — NIFTY 100 ─── */

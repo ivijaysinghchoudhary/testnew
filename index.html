@@ -1,55 +1,63 @@
 ```html
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
+
 <meta charset="UTF-8">
-<title>Nifty Dashboard</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<title>Choudhary Githubd</title>
 
 <style>
 
 body{
-font-family:'Segoe UI',sans-serif;
+font-family:Segoe UI;
 background:#0f172a;
 color:#e2e8f0;
 margin:0;
 padding:20px;
 }
 
-/* header */
-
 .header{
 text-align:center;
-padding:20px;
 background:#1e293b;
-border-radius:15px;
-margin-bottom:20px;
+padding:20px;
+border-radius:12px;
 border:1px solid #334155;
 }
 
 #price{
-font-size:3.5rem;
+font-size:3rem;
 font-weight:bold;
+margin:10px 0;
 }
 
 #change{
 font-size:1.2rem;
 }
 
+#marketInfo{
+color:#94a3b8;
+font-size:14px;
+margin-top:6px;
+}
+
 /* search */
 
 .search-box{
-margin-top:20px;
+margin-top:15px;
 }
 
 .search-box input{
 padding:10px;
-width:240px;
 border-radius:8px;
 border:none;
+width:220px;
 }
 
 .search-box button{
-padding:10px 14px;
+padding:10px;
 border:none;
 border-radius:8px;
 background:#3b82f6;
@@ -68,18 +76,22 @@ border:1px solid #334155;
 }
 
 .ticker{
-display:inline-block;
 white-space:nowrap;
 padding:10px;
-animation:scrollTicker 30s linear infinite;
+display:inline-block;
+animation:scroll 18s linear infinite;
 }
 
-@keyframes scrollTicker{
+.ticker-wrapper:hover .ticker{
+animation-play-state:paused;
+}
+
+@keyframes scroll{
 0%{transform:translateX(100%)}
 100%{transform:translateX(-100%)}
 }
 
-/* gainers losers */
+/* market panels */
 
 .market-panels{
 display:grid;
@@ -98,7 +110,7 @@ border:1px solid #334155;
 .panel h3{
 margin-top:0;
 border-bottom:2px solid #3b82f6;
-padding-bottom:8px;
+padding-bottom:6px;
 }
 
 .stock-row{
@@ -119,17 +131,17 @@ margin-top:20px;
 
 .news-column{
 background:#1e293b;
-border-radius:12px;
 padding:15px;
+border-radius:12px;
 border:1px solid #334155;
-max-height:500px;
+max-height:450px;
 overflow-y:auto;
 }
 
 .news-column h3{
 margin-top:0;
 border-bottom:2px solid #3b82f6;
-padding-bottom:10px;
+padding-bottom:8px;
 }
 
 .news-item{
@@ -155,22 +167,19 @@ color:#94a3b8;
 
 <small>NIFTY 50 LIVE</small>
 
-<div id="marketInfo" style="margin-top:8px;font-size:14px;color:#94a3b8;"></div>
+<div id="marketInfo"></div>
 
 <div id="price">Loading...</div>
 <div id="change">--</div>
 
 <div class="search-box">
-
 <input id="stockSearch" placeholder="Search stock (RELIANCE.NS)">
 <button onclick="searchStock()">Search</button>
-
 <div id="stockResult"></div>
-
 </div>
 
 <div class="ticker-wrapper">
-<div class="ticker" id="ticker">Loading ticker...</div>
+<div id="ticker" class="ticker">Loading ticker...</div>
 </div>
 
 </div>
@@ -219,15 +228,53 @@ const stocks=[
 "MARUTI.NS","SUNPHARMA.NS","ULTRACEMCO.NS","WIPRO.NS"
 ];
 
+/* MARKET CLOCK */
+
+function updateClock(){
+
+const now=new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
+
+const day=now.getDay();
+const minutes=now.getHours()*60+now.getMinutes();
+
+let status="";
+
+if(day===0 || day===6){
+
+status="🔴 MARKET CLOSED";
+
+}
+else if(minutes>=540 && minutes<555){
+
+status="⏳ PRE-OPEN";
+
+}
+else if(minutes>=555 && minutes<=930){
+
+status="🟢 MARKET OPEN";
+
+}
+else{
+
+status="🔴 MARKET CLOSED";
+
+}
+
+const date=now.toLocaleDateString("en-IN",{weekday:"long",day:"numeric",month:"long",year:"numeric"});
+
+const time=now.toLocaleTimeString("en-IN");
+
+document.getElementById("marketInfo").innerHTML=date+" • "+time+" IST • "+status;
+
+}
+
 /* NIFTY */
 
 async function fetchNifty(){
 
 try{
 
-const r=await fetch(proxy+encodeURIComponent(
-"https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI"
-));
+const r=await fetch(proxy+encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?"+Date.now()));
 
 const d=await r.json();
 
@@ -242,22 +289,20 @@ const percent=(change/m.previousClose*100).toFixed(2);
 const color=change>=0?"#22c55e":"#ef4444";
 
 document.getElementById("price").innerText="₹"+price.toFixed(2);
+
 document.getElementById("price").style.color=color;
 
-document.getElementById("change").innerText=
-(change.toFixed(2)+" ("+percent+"%)");
+document.getElementById("change").innerText=change.toFixed(2)+" ("+percent+"%)";
 
 document.getElementById("change").style.color=color;
 
-}
-catch{
+}catch{
 
-setTimeout(fetchNifty,5000);
-
-}
+document.getElementById("price").innerText="Data unavailable";
 
 }
 
+}
 
 /* STOCK SEARCH */
 
@@ -267,9 +312,7 @@ const symbol=document.getElementById("stockSearch").value;
 
 try{
 
-const r=await fetch(proxy+encodeURIComponent(
-"https://query1.finance.yahoo.com/v8/finance/chart/"+symbol
-));
+const r=await fetch(proxy+encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/"+symbol));
 
 const d=await r.json();
 
@@ -283,13 +326,9 @@ const per=(c/m.previousClose*100).toFixed(2);
 
 const color=c>=0?"#22c55e":"#ef4444";
 
-document.getElementById("stockResult").innerHTML=
-`<span style="color:${color}">
-${symbol} ₹${p.toFixed(2)} (${c.toFixed(2)} | ${per}%)
-</span>`;
+document.getElementById("stockResult").innerHTML=`<span style="color:${color}">${symbol} ₹${p.toFixed(2)} (${per}%)</span>`;
 
-}
-catch{
+}catch{
 
 document.getElementById("stockResult").innerText="Stock not found";
 
@@ -297,23 +336,22 @@ document.getElementById("stockResult").innerText="Stock not found";
 
 }
 
-
-/* TICKER + MARKET DATA */
+/* MARKET DATA */
 
 async function loadMarket(){
 
 let tickerHTML="";
 let data=[];
 
-for(let s of stocks){
+for(const s of stocks){
 
 try{
 
-const r=await fetch(proxy+encodeURIComponent(
-"https://query1.finance.yahoo.com/v8/finance/chart/"+s
-));
+const r=await fetch(proxy+encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/"+s+"?"+Date.now()));
 
 const d=await r.json();
+
+if(!d.chart.result) continue;
 
 const m=d.chart.result[0].meta;
 
@@ -323,54 +361,40 @@ const c=p-m.previousClose;
 
 const per=(c/m.previousClose*100);
 
-data.push({symbol:s,p,c,per});
+data.push({symbol:s,per});
 
 const color=c>=0?"#22c55e":"#ef4444";
 
-tickerHTML+=
-`<span style="margin-right:40px;color:${color}">
-${s.replace(".NS","")} ₹${p.toFixed(0)}
-(${per.toFixed(2)}%)
+tickerHTML+=`<span style="margin-right:35px;color:${color}">
+${s.replace(".NS","")} ₹${p.toFixed(0)} (${per.toFixed(2)}%)
 </span>`;
 
-}
-catch{}
+}catch{}
 
 }
 
 document.getElementById("ticker").innerHTML=tickerHTML;
 
-/* gainers losers */
-
 data.sort((a,b)=>b.per-a.per);
 
-let gainHTML="";
-let loseHTML="";
+let gHTML="";
+let lHTML="";
 
 for(let i=0;i<5;i++){
 
 const g=data[i];
 const l=data[data.length-1-i];
 
-gainHTML+=
-`<div class="stock-row">
-<span>${g.symbol.replace(".NS","")}</span>
-<span style="color:#22c55e">${g.per.toFixed(2)}%</span>
-</div>`;
+gHTML+=`<div class="stock-row"><span>${g.symbol.replace(".NS","")}</span><span style="color:#22c55e">${g.per.toFixed(2)}%</span></div>`;
 
-loseHTML+=
-`<div class="stock-row">
-<span>${l.symbol.replace(".NS","")}</span>
-<span style="color:#ef4444">${l.per.toFixed(2)}%</span>
-</div>`;
+lHTML+=`<div class="stock-row"><span>${l.symbol.replace(".NS","")}</span><span style="color:#ef4444">${l.per.toFixed(2)}%</span></div>`;
 
 }
 
-document.getElementById("gainers").innerHTML=gainHTML;
-document.getElementById("losers").innerHTML=loseHTML;
+document.getElementById("gainers").innerHTML=gHTML;
+document.getElementById("losers").innerHTML=lHTML;
 
 }
-
 
 /* RSS */
 
@@ -378,9 +402,7 @@ async function fetchRSS(url,id){
 
 try{
 
-const api="https://api.rss2json.com/v1/api.json?rss_url=";
-
-const r=await fetch(api+encodeURIComponent(url));
+const r=await fetch("https://api.rss2json.com/v1/api.json?rss_url="+encodeURIComponent(url));
 
 const d=await r.json();
 
@@ -390,8 +412,7 @@ for(let i=0;i<10;i++){
 
 const n=d.items[i];
 
-html+=
-`<div class="news-item">
+html+=`<div class="news-item">
 <a href="${n.link}" target="_blank">${n.title}</a>
 <div class="news-date">${new Date(n.pubDate).toDateString()}</div>
 </div>`;
@@ -400,87 +421,23 @@ html+=
 
 document.querySelector("#"+id+" .content").innerHTML=html;
 
-}
-catch{}
-
-}
-function updateMarketClock(){
-
-const now = new Date();
-
-/* IST time */
-
-const istTime = new Date(
-now.toLocaleString("en-US", {timeZone: "Asia/Kolkata"})
-);
-
-const day = istTime.getDay();
-const hour = istTime.getHours();
-const minute = istTime.getMinutes();
-const second = istTime.getSeconds();
-
-const totalMinutes = hour*60 + minute;
-
-let status = "";
-
-/* NSE timing logic */
-
-if(day === 0 || day === 6){
-
-status="🔴 MARKET CLOSED (Weekend)";
-
-}
-else if(totalMinutes >= 540 && totalMinutes < 555){
-
-status="⏳ PRE-OPEN";
-
-}
-else if(totalMinutes >= 555 && totalMinutes <= 930){
-
-status="🟢 MARKET OPEN";
-
-}
-else{
-
-status="🔴 MARKET CLOSED";
-
-}
-
-/* date */
-
-const dateStr = istTime.toLocaleDateString("en-IN",{
-weekday:"long",
-day:"numeric",
-month:"long",
-year:"numeric"
-});
-
-/* time */
-
-const timeStr = istTime.toLocaleTimeString("en-IN");
-
-/* display */
-
-document.getElementById("marketInfo").innerHTML =
-dateStr + " • " + timeStr + " IST • " + status;
+}catch{}
 
 }
 
 /* RUN */
 
+updateClock();
 fetchNifty();
-
 loadMarket();
 
 fetchRSS("https://timesofindia.indiatimes.com/rssfeeds/1898055.cms","toi");
 fetchRSS("https://www.livemint.com/rss/markets","livemint");
 fetchRSS("https://www.moneycontrol.com/rss/marketreports.xml","moneycontrol");
 
+setInterval(updateClock,1000);
 setInterval(fetchNifty,60000);
 setInterval(loadMarket,120000);
-
-updateMarketClock();
-setInterval(updateMarketClock,1000);
 
 </script>
 

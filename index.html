@@ -768,7 +768,7 @@ body {
 
   <!-- Advance/Decline -->
   <div class="panel">
-    <h3>Advance / Decline Ratio</h3>
+    <h3>Advance / Decline Ratio <span style="font-size:0.65rem;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0">(Nifty 100)</span></h3>
     <div class="ad-ring-wrap">
       <div class="ad-ring">
         <svg viewBox="0 0 90 90">
@@ -1505,29 +1505,64 @@ function updateFearGreed(vix, pcr) {
   document.getElementById("fgBarMom").style.background = "#f59e0b";
 }
 
-/* ─── ADVANCE / DECLINE ─── */
+/* ─── ADVANCE / DECLINE — NIFTY 100 ─── */
+const nifty100 = [
+  // Nifty 50
+  "RELIANCE.NS","TCS.NS","HDFCBANK.NS","ICICIBANK.NS","INFY.NS",
+  "HINDUNILVR.NS","ITC.NS","LT.NS","SBIN.NS","BHARTIARTL.NS",
+  "AXISBANK.NS","KOTAKBANK.NS","ASIANPAINT.NS","MARUTI.NS","WIPRO.NS",
+  "HCLTECH.NS","TITAN.NS","NESTLEIND.NS","BAJFINANCE.NS","SUNPHARMA.NS",
+  "ONGC.NS","POWERGRID.NS","NTPC.NS","COALINDIA.NS","JSWSTEEL.NS",
+  "TATASTEEL.NS","HINDALCO.NS","BPCL.NS","GRASIM.NS","ULTRACEMCO.NS",
+  "CIPLA.NS","DRREDDY.NS","DIVISLAB.NS","EICHERMOT.NS","HEROMOTOCO.NS",
+  "BAJAJ-AUTO.NS","M&M.NS","TATACONSUM.NS","BRITANNIA.NS","APOLLOHOSP.NS",
+  "ADANIENT.NS","ADANIPORTS.NS","TATAMOTORS.NS","TECHM.NS","LTIM.NS",
+  "HDFCLIFE.NS","SBILIFE.NS","BAJAJFINSV.NS","INDUSINDBK.NS","IOC.NS",
+  // Nifty Next 50
+  "ADANIGREEN.NS","ADANITRANS.NS","AMBUJACEM.NS","AUROPHARMA.NS","BAJAJHLDNG.NS",
+  "BANKBARODA.NS","BERGEPAINT.NS","BIOCON.NS","BOSCHLTD.NS","CHOLAFIN.NS",
+  "COLPAL.NS","CONCOR.NS","DABUR.NS","DLF.NS","GAIL.NS",
+  "GODREJCP.NS","GODREJPROP.NS","HAVELLS.NS","ICICIPRULI.NS","ICICIGI.NS",
+  "INDUSTOWER.NS","IRCTC.NS","JINDALSTEL.NS","JUBLFOOD.NS","LICHSGFIN.NS",
+  "LUPIN.NS","MARICO.NS","MCDOWELL-N.NS","MUTHOOTFIN.NS","NAUKRI.NS",
+  "NMDC.NS","OFSS.NS","PAGEIND.NS","PGHH.NS","PIIND.NS",
+  "PNB.NS","SAIL.NS","SHREECEM.NS","SIEMENS.NS","SRF.NS",
+  "TATACOMM.NS","TATAPOWER.NS","TORNTPHARM.NS","TRENT.NS","UBL.NS",
+  "UNITDSPR.NS","UPL.NS","VEDL.NS","VOLTAS.NS","ZYDUSLIFE.NS"
+];
+
 async function loadAdvanceDecline() {
-  // NSE broad market via Yahoo: use Nifty 500 stocks sample
-  const sampleStocks = [
-    "RELIANCE.NS","TCS.NS","HDFCBANK.NS","ICICIBANK.NS","INFY.NS",
-    "HINDUNILVR.NS","ITC.NS","LT.NS","SBIN.NS","BHARTIARTL.NS",
-    "AXISBANK.NS","KOTAKBANK.NS","ASIANPAINT.NS","MARUTI.NS","WIPRO.NS",
-    "HCLTECH.NS","TITAN.NS","NESTLEIND.NS","BAJFINANCE.NS","SUNPHARMA.NS",
-    "ONGC.NS","POWERGRID.NS","NTPC.NS","COALINDIA.NS","JSWSTEEL.NS",
-    "TATASTEEL.NS","HINDALCO.NS","BPCL.NS","IOC.NS","GRASIM.NS"
-  ];
-  let adv = 0, dec = 0, unch = 0;
-  for (const s of sampleStocks) {
-    try {
-      const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/" + s));
-      const d = await r.json();
-      const m = d.chart.result[0].meta;
-      const ch = m.regularMarketPrice - m.previousClose;
-      if (ch > 0.5) adv++;
-      else if (ch < -0.5) dec++;
-      else unch++;
-    } catch {}
+  let adv = 0, dec = 0, unch = 0, done = 0;
+  const total_stocks = nifty100.length;
+
+  // Show progress in the breadth field
+  const updateProgress = () => {
+    const pct = Math.round(done / total_stocks * 100);
+    const el = document.getElementById("adBreadth");
+    if (el) el.innerHTML = `<span style="color:var(--muted)">Loading... ${done}/${total_stocks}</span>`;
+  };
+  updateProgress();
+
+  // Fetch in batches of 10 to avoid overwhelming the proxy
+  const batchSize = 10;
+  for (let i = 0; i < nifty100.length; i += batchSize) {
+    const batch = nifty100.slice(i, i + batchSize);
+    await Promise.all(batch.map(async (s) => {
+      try {
+        const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/" + s));
+        const d = await r.json();
+        const m = d.chart.result[0].meta;
+        const ch = m.regularMarketPrice - m.previousClose;
+        const pctCh = Math.abs(ch / m.previousClose * 100);
+        if (ch > 0 && pctCh > 0.1) adv++;
+        else if (ch < 0 && pctCh > 0.1) dec++;
+        else unch++;
+      } catch {}
+      done++;
+    }));
+    updateProgress();
   }
+
   const total = adv + dec + unch;
   const ratio = dec > 0 ? (adv / dec).toFixed(2) : "∞";
   const breadthPct = total > 0 ? Math.round(adv / total * 100) : 0;
@@ -1536,18 +1571,16 @@ async function loadAdvanceDecline() {
   document.getElementById("adAdv").textContent = adv;
   document.getElementById("adDec").textContent = dec;
   document.getElementById("adUnch").textContent = unch;
-  document.getElementById("adTotal").textContent = total;
+  document.getElementById("adTotal").textContent = `${total} / ${total_stocks}`;
   document.getElementById("adRatio").textContent = ratio;
   document.getElementById("adBreadth").innerHTML = `<span style="color:${breadthColor}">${breadthPct}% bullish</span>`;
 
   // Donut arc
   const circ = 220;
-  const advOffset = circ - (adv / total) * circ;
-  const decStart = (adv / total) * 360;
-  document.getElementById("adAdvArc").style.strokeDashoffset = advOffset;
+  document.getElementById("adAdvArc").style.strokeDashoffset = circ - (adv / total) * circ;
   document.getElementById("adDecArc").style.strokeDasharray = `${(dec / total) * circ} ${circ}`;
   document.getElementById("adDecArc").style.strokeDashoffset = -(adv / total) * circ;
-  document.getElementById("adDecArc").setAttribute("transform", `rotate(${-90 + (adv/total)*360} 45 45)`);
+  document.getElementById("adDecArc").setAttribute("transform", `rotate(${-90 + (adv / total) * 360} 45 45)`);
 }
 
 /* ─── 52-WEEK HIGH/LOW ─── */

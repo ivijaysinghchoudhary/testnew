@@ -502,6 +502,28 @@ body {
 .chart-btn:hover { border-color: var(--accent); color: var(--accent); }
 .chart-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
+/* ── DATA MODE BUTTONS ── */
+.data-mode-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--muted2);
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  line-height: 1.6;
+}
+.data-mode-btn:hover { border-color: var(--accent); color: var(--accent); }
+.data-mode-btn.active { background: var(--accent); border-color: var(--accent); color: #fff; }
+.data-mode-btn.low-data-on { background: #22c55e; border-color: #22c55e; color: #fff; }
+
+/* Low data mode visual indicator */
+body.low-data-mode .refresh-dot { background: #f59e0b !important; }
+body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background: rgba(245,158,11,0.05); }
+
 /* ── AUTO-REFRESH INDICATOR ── */
 .refresh-bar {
   display: flex;
@@ -922,15 +944,34 @@ body {
 </div>
 
 <!-- ── AUTO-REFRESH INDICATOR ── -->
-<div class="refresh-bar">
-  <div class="refresh-dot"></div>
-  <div class="refresh-item">Last updated: <span id="lastUpdated">--:--:--</span></div>
+<div class="refresh-bar" id="refreshBar">
+  <div class="refresh-dot" id="refreshDot"></div>
+  <div class="refresh-item">Updated: <span id="lastUpdated">--:--:--</span></div>
   <div class="refresh-sep">|</div>
-  <div class="refresh-item">Nifty refreshes every <span>15s</span></div>
+  <div class="refresh-item">Next Nifty: <span id="refreshCountdown">15s</span></div>
   <div class="refresh-sep">|</div>
-  <div class="refresh-item">Markets in <span>60s</span></div>
+
+  <!-- Ticker interval selector -->
+  <div class="refresh-item" style="gap:5px">
+    <span>Ticker:</span>
+    <button onclick="setTickerInterval(60)"  class="data-mode-btn active" id="tbtn-60">1m</button>
+    <button onclick="setTickerInterval(180)" class="data-mode-btn" id="tbtn-180">3m</button>
+    <button onclick="setTickerInterval(600)" class="data-mode-btn" id="tbtn-600">10m</button>
+  </div>
   <div class="refresh-sep">|</div>
-  <div class="refresh-item">Next refresh in <span id="refreshCountdown">15s</span></div>
+
+  <!-- Low Data Mode toggle -->
+  <div class="refresh-item" style="gap:6px">
+    <span>Low Data:</span>
+    <button onclick="toggleLowDataMode()" id="lowDataBtn" class="data-mode-btn">OFF</button>
+  </div>
+  <div class="refresh-sep">|</div>
+
+  <!-- Live data usage meter -->
+  <div class="refresh-item" style="gap:4px;font-size:0.68rem">
+    <span id="dataMeter" style="color:var(--green)">~0 MB used</span>
+    <span style="color:var(--muted)">today</span>
+  </div>
 </div>
 
 <!-- ── INDICES ROW ── -->
@@ -3354,42 +3395,214 @@ function initSignalEngine() {
   setTimeout(() => runSignalEngine(true), 5000);
 }
 
+/* ─── DATA MODE MANAGER ─── */
+
+// Per-call size estimates in KB
+const DATA_SIZES = {
+  nifty:       8,    // single quote
+  indices:     40,   // 5 indices
+  global:      48,   // 6 markets
+  commodities: 48,   // 6 items
+  ticker:      400,  // 50 stocks × ~8KB each
+  adRatio:     800,  // 100 stocks
+  week52:      2000, // 50 stocks × 1yr data
+  sectors:     96,   // 12 sectors
+  pcr:         50,   // VIX 1yr data
+  srLevels:    30,   // 1mo daily
+  fii:         5,
+  rss:         60,
+  announcements: 10,
+};
+
+let dataUsedKB    = 0;
+let tickerIntervalMs = 60000;  // default 1 min
+let lowDataMode   = false;
+
+// All managed intervals stored here so we can clear & reset
+const intervals = {};
+
+function trackData(key) {
+  dataUsedKB += (DATA_SIZES[key] || 0);
+  const mb = (dataUsedKB / 1024).toFixed(2);
+  const el = document.getElementById("dataMeter");
+  if (!el) return;
+  const color = dataUsedKB > 200 * 1024 ? "#ef4444" : dataUsedKB > 100 * 1024 ? "#f59e0b" : "#22c55e";
+  el.textContent = `~${mb} MB used`;
+  el.style.color = color;
+}
+
+// Wrap fetch functions to track data
+const _origFetchNifty       = fetchNifty;
+const _origLoadIndices      = loadIndices;
+const _origLoadGlobal       = loadGlobal;
+const _origLoadGiftPanel    = loadGiftPanel;
+const _origLoadCommodities  = loadCommodities;
+const _origLoadTicker       = loadTicker;
+const _origLoadAdvDecline   = loadAdvanceDecline;
+const _origLoad52Week       = load52Week;
+const _origLoadSectorHeatmap= loadSectorHeatmap;
+const _origLoadPCR          = loadPCR;
+const _origLoadFIIDII       = loadFIIDII;
+const _origLoadAnnouncements= loadAnnouncements;
+
+async function trackedFetchNifty()        { await _origFetchNifty();        trackData('nifty'); }
+async function trackedLoadIndices()       { await _origLoadIndices();       trackData('indices'); }
+async function trackedLoadGlobal()        { await _origLoadGlobal();        trackData('global'); }
+async function trackedLoadGiftPanel()     { await _origLoadGiftPanel();     trackData('global'); }
+async function trackedLoadCommodities()   { await _origLoadCommodities();   trackData('commodities'); }
+async function trackedLoadTicker()        { await _origLoadTicker();        trackData('ticker'); }
+async function trackedLoadAdvDecline()    { await _origLoadAdvDecline();    trackData('adRatio'); }
+async function trackedLoad52Week()        { await _origLoad52Week();        trackData('week52'); }
+async function trackedLoadSectorHeatmap() { await _origLoadSectorHeatmap(); trackData('sectors'); }
+async function trackedLoadPCR()           { await _origLoadPCR();           trackData('pcr'); }
+async function trackedLoadFIIDII()        { await _origLoadFIIDII();        trackData('fii'); }
+async function trackedLoadAnnouncements() { await _origLoadAnnouncements(); trackData('announcements'); }
+
+function clearAllIntervals() {
+  Object.values(intervals).forEach(id => clearInterval(id));
+}
+
+function startIntervals() {
+  clearAllIntervals();
+
+  const tickerMs = tickerIntervalMs;
+  const adMs     = lowDataMode ? 15 * 60000 : 5 * 60000;   // 15min vs 5min
+  const w52Ms    = lowDataMode ? null        : 5 * 60000;   // OFF vs 5min
+  const secMs    = lowDataMode ? 5 * 60000   : 60000;       // 5min vs 1min
+  const mktMs    = lowDataMode ? 3 * 60000   : 60000;       // 3min vs 1min
+  const annMs    = lowDataMode ? 30 * 60000  : 10 * 60000;  // 30min vs 10min
+
+  intervals.nifty  = setInterval(() => { trackedFetchNifty(); updateRefreshIndicator(); startCountdown(); }, 15000);
+  intervals.indices = setInterval(trackedLoadIndices,      30000);
+  intervals.global  = setInterval(trackedLoadGlobal,       mktMs);
+  intervals.gift    = setInterval(trackedLoadGiftPanel,    mktMs);
+  intervals.commod  = setInterval(trackedLoadCommodities,  mktMs);
+  intervals.ticker  = setInterval(trackedLoadTicker,       tickerMs);
+  intervals.pcr     = setInterval(trackedLoadPCR,          15 * 60000);
+  intervals.ad      = setInterval(trackedLoadAdvDecline,   adMs);
+  intervals.sectors = setInterval(trackedLoadSectorHeatmap, secMs);
+  intervals.fii     = setInterval(trackedLoadFIIDII,       5 * 60000);
+  intervals.ann     = setInterval(trackedLoadAnnouncements, annMs);
+
+  if (!lowDataMode && w52Ms) {
+    intervals.w52 = setInterval(trackedLoad52Week, w52Ms);
+  }
+  // else 52W is load-once only in low data mode
+}
+
+function setTickerInterval(ms) {
+  tickerIntervalMs = ms;
+  [60, 180, 600].forEach(s => {
+    const btn = document.getElementById("tbtn-" + s * (s === 60 ? 1 : 1));
+    if (btn) btn.classList.remove("active");
+  });
+  // map ms back to seconds for button id
+  const secs = ms / 1000;
+  const btn = document.getElementById("tbtn-" + secs);
+  if (btn) btn.classList.add("active");
+  startIntervals(); // restart with new ticker interval
+  showDataSavings();
+}
+
+function toggleLowDataMode() {
+  lowDataMode = !lowDataMode;
+  const btn = document.getElementById("lowDataBtn");
+  if (lowDataMode) {
+    btn.textContent = "ON";
+    btn.classList.add("low-data-on");
+    document.body.classList.add("low-data-mode");
+  } else {
+    btn.textContent = "OFF";
+    btn.classList.remove("low-data-on");
+    document.body.classList.remove("low-data-mode");
+    load52Week(); // reload 52W when turning off
+  }
+  startIntervals();
+  showDataSavings();
+}
+
+function showDataSavings() {
+  // Calculate projected MB per 6.25hr trading day
+  const mktSecs = 6.25 * 3600; // 22500 seconds
+
+  // Normal mode
+  const normalMB = (
+    (mktSecs / 15)    * DATA_SIZES.nifty +
+    (mktSecs / 30)    * DATA_SIZES.indices +
+    (mktSecs / 60)    * DATA_SIZES.global +
+    (mktSecs / 60)    * DATA_SIZES.commodities +
+    (mktSecs / 60)    * DATA_SIZES.ticker +
+    (mktSecs / 300)   * DATA_SIZES.adRatio +
+    (mktSecs / 300)   * DATA_SIZES.week52 +
+    (mktSecs / 60)    * DATA_SIZES.sectors +
+    (mktSecs / 900)   * DATA_SIZES.pcr
+  ) / 1024;
+
+  // Current mode
+  const currTickerSecs = tickerIntervalMs / 1000;
+  const currAdSecs     = lowDataMode ? 900 : 300;
+  const currW52Secs    = lowDataMode ? 999999 : 300; // effectively off
+  const currSecSecs    = lowDataMode ? 300 : 60;
+  const currMktSecs2   = lowDataMode ? 180 : 60;
+
+  const currMB = (
+    (mktSecs / 15)           * DATA_SIZES.nifty +
+    (mktSecs / 30)           * DATA_SIZES.indices +
+    (mktSecs / currMktSecs2) * DATA_SIZES.global +
+    (mktSecs / currMktSecs2) * DATA_SIZES.commodities +
+    (mktSecs / currTickerSecs)* DATA_SIZES.ticker +
+    (mktSecs / currAdSecs)   * DATA_SIZES.adRatio +
+    (mktSecs / currW52Secs)  * DATA_SIZES.week52 +
+    (mktSecs / currSecSecs)  * DATA_SIZES.sectors +
+    (mktSecs / 900)          * DATA_SIZES.pcr
+  ) / 1024;
+
+  const saving = normalMB - currMB;
+  const savingPct = Math.round(saving / normalMB * 100);
+
+  // Show as a toast notification
+  const toast = document.createElement("div");
+  toast.style.cssText = `position:fixed;bottom:20px;right:20px;background:var(--surface);border:1px solid var(--border2);
+    border-radius:10px;padding:12px 16px;font-size:0.75rem;z-index:9999;max-width:300px;
+    box-shadow:0 4px 20px rgba(0,0,0,0.4);line-height:1.6;transition:opacity 0.3s`;
+  toast.innerHTML = `
+    <div style="font-weight:700;color:var(--text);margin-bottom:6px">📊 Data Usage Estimate</div>
+    <div style="color:var(--muted2)">Normal (1m ticker, 52W on):
+      <strong style="color:var(--red)">~${normalMB.toFixed(0)} MB/day</strong></div>
+    <div style="color:var(--muted2)">Current settings:
+      <strong style="color:${saving > 0 ? "#22c55e" : "var(--text)"}">~${currMB.toFixed(0)} MB/day</strong></div>
+    ${saving > 0 ? `<div style="color:#22c55e;font-weight:700;margin-top:4px">💾 Saving ~${saving.toFixed(0)} MB/day (${savingPct}%)</div>` : ""}
+    <div style="font-size:0.65rem;color:var(--muted);margin-top:4px">Ticker: every ${currTickerSecs}s · 52W: ${lowDataMode ? "load-once" : "every 5min"}</div>`;
+  document.body.appendChild(toast);
+  setTimeout(() => { toast.style.opacity = "0"; setTimeout(() => toast.remove(), 300); }, 5000);
+}
+
+/* ─── BOOT ─── */
 updateClock();
 updateRefreshIndicator();
 startCountdown();
-fetchNifty();
-loadIndices();
-loadGlobal();
-loadGiftPanel();
-loadCommodities();
-loadTicker();
-// Load stored PCR history from GitHub first, then fetch live
-ghLoadPCRHistory().then(() => loadPCR());
-loadAdvanceDecline();
-load52Week();
-loadAnnouncements();
-loadFIIDII();
-loadSectorHeatmap();
+trackedFetchNifty();
+trackedLoadIndices();
+trackedLoadGlobal();
+trackedLoadGiftPanel();
+trackedLoadCommodities();
+trackedLoadTicker();
+ghLoadPCRHistory().then(() => trackedLoadPCR());
+trackedLoadAdvDecline();
+trackedLoad52Week();
+trackedLoadAnnouncements();
+trackedLoadFIIDII();
+trackedLoadSectorHeatmap();
 initSignalEngine();
 
 fetchRSS("https://timesofindia.indiatimes.com/rssfeeds/1898055.cms", "toi");
 fetchRSS("https://www.livemint.com/rss/markets", "livemint");
 fetchRSS("https://www.business-standard.com/rss/markets-106.rss", "bsmarkets");
+trackData('rss');
 
-/* ─── REFRESH INTERVALS ─── */
 setInterval(updateClock, 1000);
-setInterval(() => { fetchNifty(); updateRefreshIndicator(); startCountdown(); }, 15000);
-setInterval(loadIndices, 30000);
-setInterval(loadGlobal, 60000);
-setInterval(loadGiftPanel, 60000);
-setInterval(loadCommodities, 60000);
-setInterval(loadTicker, 60000);
-setInterval(loadPCR, 15 * 60 * 1000);
-setInterval(loadAdvanceDecline, 300000);
-setInterval(load52Week, 300000);
-setInterval(loadAnnouncements, 600000);
-setInterval(loadFIIDII, 300000);
-setInterval(loadSectorHeatmap, 60000);
+startIntervals();
+
 
 
 

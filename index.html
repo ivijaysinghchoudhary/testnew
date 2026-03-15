@@ -948,6 +948,14 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
   <div class="refresh-dot" id="refreshDot"></div>
   <div class="refresh-item">Updated: <span id="lastUpdated">--:--:--</span></div>
   <div class="refresh-sep">|</div>
+
+  <!-- Worker status -->
+  <div class="refresh-item" style="gap:5px;cursor:pointer" onclick="checkWorkerHealth(true)" title="Click to recheck Worker">
+    <span id="workerStatusDot" style="width:8px;height:8px;border-radius:50%;background:#64748b;display:inline-block;flex-shrink:0"></span>
+    <span id="workerStatusText" style="font-size:0.68rem;color:var(--muted)">Worker: checking...</span>
+  </div>
+  <div class="refresh-sep">|</div>
+
   <div class="refresh-item">Next Nifty: <span id="refreshCountdown">15s</span></div>
   <div class="refresh-sep">|</div>
 
@@ -1458,6 +1466,64 @@ async function wFetch(path, fallbackFn) {
     throw e;
   }
 }
+
+/* ─── WORKER HEALTH CHECK ─── */
+let workerOnline = null; // null=unknown, true=online, false=offline/fallback
+
+async function checkWorkerHealth(manual = false) {
+  const dot  = document.getElementById("workerStatusDot");
+  const text = document.getElementById("workerStatusText");
+  if (!dot || !text) return;
+
+  if (manual) {
+    dot.style.background  = "#f59e0b";
+    text.textContent      = "Worker: checking...";
+    text.style.color      = "#f59e0b";
+  }
+
+  try {
+    const start = Date.now();
+    const r = await fetch(WORKER_URL + "/health", { signal: AbortSignal.timeout(4000) });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    const d   = await r.json();
+    const ms  = Date.now() - start;
+    workerOnline = true;
+
+    dot.style.background  = "#22c55e";
+    dot.style.boxShadow   = "0 0 4px #22c55e";
+    text.textContent      = `Worker: ✓ NSE live (${ms}ms)`;
+    text.style.color      = "#22c55e";
+    text.title            = `Worker online · ${d.worker} · ${d.timestamp}`;
+
+  } catch(e) {
+    workerOnline = false;
+    dot.style.background  = "#ef4444";
+    dot.style.boxShadow   = "0 0 4px #ef4444";
+    text.textContent      = "Worker: ✗ using fallback proxy";
+    text.style.color      = "#ef4444";
+    text.title            = "Worker unreachable — data coming from Yahoo via allorigins.win proxy\nClick to retry";
+
+    // Show a one-time toast if this is auto-detected (not manual click)
+    if (!manual && workerOnline !== false) {
+      const toast = document.createElement("div");
+      toast.style.cssText = `position:fixed;bottom:20px;right:20px;background:var(--surface);
+        border:1px solid #ef444466;border-radius:10px;padding:12px 16px;font-size:0.75rem;
+        z-index:9999;max-width:320px;box-shadow:0 4px 20px rgba(0,0,0,0.4);line-height:1.6`;
+      toast.innerHTML = `<div style="font-weight:700;color:#ef4444;margin-bottom:4px">⚠ Cloudflare Worker Offline</div>
+        <div style="color:var(--muted2)">Falling back to Yahoo Finance via allorigins proxy.</div>
+        <div style="color:var(--muted);font-size:0.68rem;margin-top:4px">
+          Dashboard still works but will be slower.<br>
+          Check Worker at: <a href="${WORKER_URL}/health" target="_blank" style="color:var(--accent)">${WORKER_URL}/health</a>
+        </div>`;
+      document.body.appendChild(toast);
+      setTimeout(() => toast.remove(), 8000);
+    }
+  }
+}
+
+// Check health on load, then every 2 minutes
+setTimeout(() => checkWorkerHealth(), 2000);
+setInterval(() => checkWorkerHealth(), 120000);
 
 
 /* ─── CLOCK ─── */

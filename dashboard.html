@@ -896,6 +896,94 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
 }
 .prob-guide span { padding: 1px 6px; border-radius: 4px; }
 
+/* ── TRADING LOG ── */
+.tlog-wrap {
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  overflow: hidden;
+}
+.tlog-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.tlog-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.75rem;
+}
+.tlog-table th {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 600;
+  font-size: 0.65rem;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface2);
+  white-space: nowrap;
+}
+.tlog-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--border);
+  vertical-align: middle;
+}
+.tlog-table tr:last-child td { border-bottom: none; }
+.tlog-table tr:hover td { background: var(--surface2); }
+.tlog-outcome {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  cursor: default;
+}
+.tlog-outcome-pending  { background: rgba(245,158,11,0.15); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+.tlog-outcome-win      { background: rgba(34,197,94,0.15);  color: #22c55e; border: 1px solid rgba(34,197,94,0.3); }
+.tlog-outcome-loss     { background: rgba(239,68,68,0.15);  color: #ef4444; border: 1px solid rgba(239,68,68,0.3); }
+.tlog-outcome-skip     { background: rgba(148,163,184,0.1); color: #64748b; border: 1px solid rgba(148,163,184,0.2); }
+.tlog-edit-btn {
+  background: none;
+  border: 1px solid var(--border2);
+  color: var(--muted);
+  padding: 2px 7px;
+  border-radius: 4px;
+  font-size: 0.65rem;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+  transition: all 0.15s;
+}
+.tlog-edit-btn:hover { border-color: var(--accent); color: var(--accent); }
+.tlog-stats {
+  display: flex;
+  gap: 12px;
+  padding: 10px 16px;
+  border-top: 1px solid var(--border);
+  flex-wrap: wrap;
+  background: var(--surface2);
+}
+.tlog-stat { font-size: 0.72rem; color: var(--muted2); }
+.tlog-stat strong { font-weight: 700; }
+.vol-badge {
+  display: inline-block;
+  font-size: 0.62rem;
+  padding: 1px 5px;
+  border-radius: 3px;
+  margin-left: 3px;
+  font-weight: 600;
+}
+.vol-high   { background: rgba(34,197,94,0.15);  color: #22c55e; }
+.vol-low    { background: rgba(239,68,68,0.15);  color: #ef4444; }
+.vol-normal { background: rgba(245,158,11,0.1);  color: #f59e0b; }
+.vol-na     { background: rgba(148,163,184,0.1); color: #64748b; }
+
 /* ── LOADING PULSE ── */
 .skeleton {
   background: linear-gradient(90deg, var(--surface2) 25%, var(--border) 50%, var(--surface2) 75%);
@@ -1344,6 +1432,8 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
         <div class="data-row"><span class="label">PCR <small style="color:var(--muted)">(proxy)</small></span><span class="val" id="si-pcr">—</span></div>
         <div class="data-row"><span class="label">A/D Ratio</span><span class="val" id="si-ad">—</span></div>
         <div class="data-row"><span class="label">Breadth</span><span class="val" id="si-breadth">—</span></div>
+        <div class="data-row"><span class="label">Nifty Volume</span><span class="val" id="si-vol">—</span></div>
+        <div class="data-row"><span class="label">Vol vs 20d Avg</span><span class="val" id="si-volavg">—</span></div>
         <div class="data-row"><span class="label">ATM Strike</span><span class="val" id="si-atm">—</span></div>
         <div class="data-row"><span class="label">Nearest S/R</span><span class="val" id="si-sr">—</span></div>
         <div class="data-row"><span class="label">S/R Distance</span><span class="val" id="si-srdist">—</span></div>
@@ -1371,6 +1461,56 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
 
 </div>
 
+
+<!-- ── TRADING LOG ── -->
+<div class="section-label">Trading Log — Signal Outcomes</div>
+<div class="tlog-wrap">
+  <div class="tlog-header">
+    <div>
+      <div style="font-family:'Inter',sans-serif;font-size:0.8rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent)">📓 Trading Log</div>
+      <div style="font-size:0.68rem;color:var(--muted);margin-top:2px">Record outcomes of each signal · Saved to GitHub · Persists across devices</div>
+    </div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
+      <div id="tlogStorageStatus" style="font-size:0.68rem;color:var(--muted)">Loading...</div>
+      <button onclick="tlogExportCSV()" style="background:var(--surface2);border:1px solid var(--border2);color:var(--muted2);padding:4px 10px;border-radius:6px;font-size:0.7rem;cursor:pointer;font-family:'Inter',sans-serif">↓ Export CSV</button>
+    </div>
+  </div>
+
+  <div style="overflow-x:auto">
+    <table class="tlog-table">
+      <thead>
+        <tr>
+          <th>Date</th>
+          <th>Time</th>
+          <th>Signal</th>
+          <th>Score</th>
+          <th>Strike</th>
+          <th>Entry ₹</th>
+          <th>Volume</th>
+          <th>Regime</th>
+          <th>Exit ₹</th>
+          <th>P&L</th>
+          <th>Outcome</th>
+          <th>Notes</th>
+          <th>Action</th>
+        </tr>
+      </thead>
+      <tbody id="tlogBody">
+        <tr><td colspan="13" style="color:var(--muted);text-align:center;padding:20px">No signals logged yet — signals will appear here automatically</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="tlog-stats" id="tlogStats">
+    <div class="tlog-stat">Total signals: <strong id="tlog-total">0</strong></div>
+    <div class="tlog-stat">Wins: <strong id="tlog-wins" style="color:#22c55e">0</strong></div>
+    <div class="tlog-stat">Losses: <strong id="tlog-losses" style="color:#ef4444">0</strong></div>
+    <div class="tlog-stat">Win Rate: <strong id="tlog-winrate">—</strong></div>
+    <div class="tlog-stat">Avg P&L: <strong id="tlog-avgpnl">—</strong></div>
+    <div class="tlog-stat">Best day: <strong id="tlog-best" style="color:#22c55e">—</strong></div>
+    <div class="tlog-stat">Skipped: <strong id="tlog-skipped" style="color:var(--muted)">0</strong></div>
+  </div>
+</div>
 
 <div class="section-label">Important Announcements</div>
 <div class="grid-2">
@@ -2955,7 +3095,7 @@ function renderSRLevels(levels, spot, srCtx) {
 }
 
 // Core signal logic — v2 with corrected factors
-function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty }) {
+function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty, volScore, volLabel }) {
   const dayChgPct = ((spot - prevClose) / prevClose * 100);
   const atm = getATM(spot);
 
@@ -3014,7 +3154,15 @@ function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, brea
   else if (momentumChg < -0.5){ score -= 1; reasons.push(`Intraday momentum ${momentumChg.toFixed(2)}%`); }
   else                         { reasons.push(`Momentum flat (${dayChgPct.toFixed(2)}%)`); }
 
-  // ── FACTOR 5: PCR NOTE (labeled honestly) ────────────────────────────
+  // ── FACTOR 5: VOLUME CONFIRMATION ────────────────────────────────────
+  // High volume confirms direction, low volume weakens conviction
+  // volScore: +1 = high vol (confirms), 0 = normal, -1 = low vol (warns)
+  if (volScore === 1)       { score += 1; reasons.push(`Volume high (${volLabel}) — confirms signal`); }
+  else if (volScore === -1) { score -= 1; reasons.push(`Volume low (${volLabel}) — weak conviction`); warnings.push(`Low volume day — signal less reliable`); }
+  else if (volLabel && volLabel !== "N/A") { reasons.push(`Volume ${volLabel}`); }
+  else                      { reasons.push(`Volume data unavailable`); }
+
+  // ── FACTOR 6: PCR NOTE (labeled honestly) ────────────────────────────
   // PCR is VIX-derived proxy — treated as WEAK signal, max ±1 pt
   // Clearly labeled so user knows it's an approximation
   const pcrNote = "(⚠ VIX-proxy, not real OI)";
@@ -3404,9 +3552,310 @@ function renderSignal(sig, inputs) {
   document.getElementById("sigNextTime").textContent = getNextSignalTime();
 }
 
+/* ─── VOLUME CONFIRMATION ENGINE ─── */
+// Fetches Nifty's 20-day average volume and compares to today
+// Returns volScore (+1 confirms, 0 neutral, -1 contradicts), volRatio, volLabel
+let cachedVolData = null;
+let cachedVolDate = null;
+
+async function computeVolumeConfirmation(direction) {
+  const today = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}))
+    .toISOString().slice(0,10);
+
+  // Use cached data if same day
+  if (cachedVolDate === today && cachedVolData) return cachedVolData;
+
+  try {
+    // Fetch 30 days of Nifty daily data to get volume history
+    const r = await wFetch("/nse/vixhistory", async () => {
+      const url = "https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=1mo&interval=1d";
+      const res = await fetch(proxy + encodeURIComponent(url));
+      return await res.json();
+    });
+
+    // If Worker returns VIX data use Yahoo directly for Nifty volume
+    let volumes = [], todayVol = 0;
+    try {
+      const url = "https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=1mo&interval=1d";
+      const res = await fetch(proxy + encodeURIComponent(url));
+      const d   = await res.json();
+      const q   = d.chart.result[0].indicators.quote[0];
+      volumes   = (q.volume || []).filter(v => v != null && v > 0);
+      todayVol  = volumes[volumes.length - 1] || 0;
+    } catch {}
+
+    if (!volumes.length) throw new Error("no volume data");
+
+    // 20-day average (exclude today)
+    const hist20  = volumes.slice(-21, -1); // last 20 days excluding today
+    const avg20   = hist20.length ? hist20.reduce((a,b)=>a+b,0) / hist20.length : 0;
+    const volRatio = avg20 > 0 ? (todayVol / avg20) : 1;
+
+    // Volume score relative to direction
+    // High volume in direction = confirms. High volume against = warns.
+    // Low volume = weak signal regardless of direction.
+    let volScore = 0, volLabel = "", volClass = "vol-normal";
+
+    if (volRatio >= 1.3) {
+      // High volume day — direction matters
+      volScore  = direction ? 1 : 0;  // +1 if direction given (confirms momentum)
+      volLabel  = `${(volRatio*100).toFixed(0)}% of avg — HIGH VOL ✓`;
+      volClass  = "vol-high";
+    } else if (volRatio >= 0.8) {
+      volScore  = 0;
+      volLabel  = `${(volRatio*100).toFixed(0)}% of avg — normal`;
+      volClass  = "vol-normal";
+    } else {
+      volScore  = -1;  // low volume = weak conviction regardless of direction
+      volLabel  = `${(volRatio*100).toFixed(0)}% of avg — LOW VOL ⚠`;
+      volClass  = "vol-low";
+    }
+
+    const result = {
+      todayVol, avg20: Math.round(avg20),
+      volRatio: parseFloat(volRatio.toFixed(2)),
+      volScore, volLabel, volClass,
+      todayVolFmt: todayVol > 1e9 ? (todayVol/1e9).toFixed(2)+"B"
+                 : todayVol > 1e6 ? (todayVol/1e6).toFixed(1)+"M" : todayVol.toString(),
+      avg20Fmt:  avg20 > 1e9 ? (avg20/1e9).toFixed(2)+"B"
+               : avg20 > 1e6 ? (avg20/1e6).toFixed(1)+"M" : Math.round(avg20).toString(),
+    };
+
+    cachedVolData = result;
+    cachedVolDate = today;
+    return result;
+
+  } catch {
+    return { volScore: 0, volLabel: "N/A", volClass: "vol-na", volRatio: 1,
+             todayVolFmt: "—", avg20Fmt: "—" };
+  }
+}
+
+/* ─── TRADING LOG — GitHub Persistent ─── */
+const TLOG_FILE = "trading_log.json";
+const TLOG_API  = `https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${TLOG_FILE}`;
+
+async function tlogRead() {
+  try {
+    const r = await fetch(TLOG_API, {
+      headers: { Authorization: `token ${GH_TOKEN}`, Accept: "application/vnd.github.v3+json" }
+    });
+    if (!r.ok) return { entries: [], sha: null };
+    const meta    = await r.json();
+    const content = JSON.parse(atob(meta.content.replace(/\n/g,"")));
+    return { entries: content.entries || [], sha: meta.sha };
+  } catch { return { entries: [], sha: null }; }
+}
+
+async function tlogWrite(entries, sha) {
+  const body = {
+    message: `Trade log update ${new Date().toISOString().slice(0,10)}`,
+    content: btoa(JSON.stringify({ entries }, null, 2)),
+    ...(sha ? { sha } : {})
+  };
+  try {
+    await fetch(TLOG_API, {
+      method: "PUT",
+      headers: {
+        Authorization: `token ${GH_TOKEN}`,
+        Accept: "application/vnd.github.v3+json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+    const el = document.getElementById("tlogStorageStatus");
+    if (el) { el.textContent = "✓ Saved to GitHub"; el.style.color = "#22c55e"; }
+  } catch {
+    const el = document.getElementById("tlogStorageStatus");
+    if (el) { el.textContent = "⚠ Save failed"; el.style.color = "#ef4444"; }
+  }
+}
+
+let tlogEntries = [];
+let tlogSHA     = null;
+
+async function tlogLoad() {
+  const el = document.getElementById("tlogStorageStatus");
+  if (el) { el.textContent = "⟳ Loading log..."; el.style.color = "#f59e0b"; }
+  const { entries, sha } = await tlogRead();
+  tlogEntries = entries;
+  tlogSHA     = sha;
+  renderTlog();
+  if (el) {
+    el.textContent = entries.length ? `✓ ${entries.length} entries loaded` : "No entries yet";
+    el.style.color = "#22c55e";
+  }
+}
+
+function renderTlog() {
+  const tbody = document.getElementById("tlogBody");
+  if (!tbody) return;
+
+  if (!tlogEntries.length) {
+    tbody.innerHTML = `<tr><td colspan="13" style="color:var(--muted);text-align:center;padding:20px">No signals logged yet</td></tr>`;
+    updateTlogStats();
+    return;
+  }
+
+  // Sort newest first
+  const sorted = [...tlogEntries].sort((a,b) => b.id - a.id);
+
+  tbody.innerHTML = sorted.map(e => {
+    const dirColor  = e.direction?.includes("CE") ? "#22c55e" : e.direction?.includes("PE") ? "#ef4444" : "#f59e0b";
+    const outcomeClass = e.outcome === "WIN" ? "tlog-outcome-win"
+                       : e.outcome === "LOSS" ? "tlog-outcome-loss"
+                       : e.outcome === "SKIP" ? "tlog-outcome-skip"
+                       : "tlog-outcome-pending";
+    const outcomeText = e.outcome || "PENDING";
+    const pnl = e.exitPrice && e.entryPrice
+      ? ((e.exitPrice - e.entryPrice) / e.entryPrice * 100).toFixed(1) + "%"
+      : "—";
+    const pnlColor = e.exitPrice && e.entryPrice
+      ? (e.exitPrice > e.entryPrice ? "#22c55e" : "#ef4444")
+      : "var(--muted)";
+
+    return `<tr>
+      <td style="color:var(--muted2);white-space:nowrap">${e.date}</td>
+      <td style="color:var(--muted2)">${e.time}</td>
+      <td style="color:${dirColor};font-weight:700">${e.direction || "—"}</td>
+      <td style="font-weight:700;color:${e.score >= 7 ? "#22c55e" : e.score >= 5 ? "#f59e0b" : "#ef4444"}">${e.score ?? "—"}/10</td>
+      <td style="color:var(--text)">${e.strike || "—"}</td>
+      <td style="color:var(--accent)">${e.entryPrice ? "₹"+e.entryPrice : "—"}</td>
+      <td><span class="vol-badge ${e.volClass || "vol-na"}">${e.volLabel?.split("—")[0]?.trim() || "—"}</span></td>
+      <td style="font-size:0.68rem;color:var(--muted2)">${e.regime?.replace(/[🟢🟡🟠🔴⚪]/u,"").trim().slice(0,18) || "—"}</td>
+      <td>${e.exitPrice ? `<input type="number" value="${e.exitPrice}" onchange="tlogUpdateExit(${e.id}, this.value)"
+        style="width:65px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:2px 5px;border-radius:4px;font-size:0.72rem;font-family:'Inter',sans-serif">` : `<input type="number" placeholder="Exit ₹" onchange="tlogUpdateExit(${e.id}, this.value)"
+        style="width:65px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:2px 5px;border-radius:4px;font-size:0.72rem;font-family:'Inter',sans-serif">`}</td>
+      <td style="color:${pnlColor};font-weight:600">${pnl}</td>
+      <td><span class="tlog-outcome ${outcomeClass}">${outcomeText}</span></td>
+      <td><input type="text" value="${e.notes || ""}" placeholder="Add note..." onchange="tlogUpdateNotes(${e.id}, this.value)"
+        style="width:100px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:2px 5px;border-radius:4px;font-size:0.68rem;font-family:'Inter',sans-serif"></td>
+      <td><button class="tlog-edit-btn" onclick="tlogDelete(${e.id})">✕</button></td>
+    </tr>`;
+  }).join("");
+
+  updateTlogStats();
+}
+
+function updateTlogStats() {
+  const closed = tlogEntries.filter(e => e.outcome === "WIN" || e.outcome === "LOSS");
+  const wins   = tlogEntries.filter(e => e.outcome === "WIN");
+  const losses = tlogEntries.filter(e => e.outcome === "LOSS");
+  const skipped= tlogEntries.filter(e => e.outcome === "SKIP");
+  const winRate= closed.length ? Math.round(wins.length / closed.length * 100) : null;
+
+  // Average P&L %
+  const pnlArr = tlogEntries
+    .filter(e => e.exitPrice && e.entryPrice)
+    .map(e => ((e.exitPrice - e.entryPrice) / e.entryPrice * 100));
+  const avgPnl = pnlArr.length ? (pnlArr.reduce((a,b)=>a+b,0) / pnlArr.length).toFixed(1) : null;
+
+  // Best single trade
+  const bestPnl = pnlArr.length ? Math.max(...pnlArr).toFixed(1) : null;
+
+  document.getElementById("tlog-total").textContent   = tlogEntries.length;
+  document.getElementById("tlog-wins").textContent    = wins.length;
+  document.getElementById("tlog-losses").textContent  = losses.length;
+  document.getElementById("tlog-winrate").textContent = winRate !== null ? winRate + "%" : "—";
+  document.getElementById("tlog-winrate").style.color = winRate >= 55 ? "#22c55e" : winRate >= 45 ? "#f59e0b" : "#ef4444";
+  document.getElementById("tlog-avgpnl").textContent  = avgPnl !== null ? (avgPnl > 0 ? "+" : "") + avgPnl + "%" : "—";
+  document.getElementById("tlog-avgpnl").style.color  = avgPnl > 0 ? "#22c55e" : "#ef4444";
+  document.getElementById("tlog-best").textContent    = bestPnl !== null ? "+" + bestPnl + "%" : "—";
+  document.getElementById("tlog-skipped").textContent = skipped.length;
+}
+
+async function tlogAddEntry(sig, inputs, prob) {
+  const now  = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
+  const date = now.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"});
+  const time = now.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",hour12:true});
+
+  // Get volume data
+  const vol = await computeVolumeConfirmation(sig.type);
+
+  const entry = {
+    id:         Date.now(),
+    date, time,
+    direction:  sig.direction,
+    score:      prob?.score ?? null,
+    confidence: sig.confidence,
+    strike:     sig.primaryStrike ? `${sig.primaryStrike} ${sig.type}` : `${sig.atm} ${sig.type || ""}`,
+    entryPrice: sig.entryMid || null,
+    exitPrice:  null,
+    outcome:    "PENDING",
+    volRatio:   vol.volRatio,
+    volLabel:   vol.volLabel,
+    volClass:   vol.volClass,
+    regime:     document.getElementById("regimeLabel")?.textContent || "—",
+    ivRank:     inputs.ivRank,
+    vix:        inputs.vix,
+    pcr:        inputs.pcr,
+    spot:       inputs.spot,
+    notes:      "",
+  };
+
+  tlogEntries.push(entry);
+  renderTlog();
+  await tlogSaveAll();
+}
+
+async function tlogUpdateExit(id, exitPriceStr) {
+  const exitPrice = parseFloat(exitPriceStr);
+  if (!exitPrice || isNaN(exitPrice)) return;
+  const entry = tlogEntries.find(e => e.id === id);
+  if (!entry) return;
+  entry.exitPrice = exitPrice;
+  // Auto-determine outcome
+  if (entry.entryPrice) {
+    const pnlPct = (exitPrice - entry.entryPrice) / entry.entryPrice * 100;
+    entry.outcome = pnlPct > 0 ? "WIN" : "LOSS";
+  }
+  renderTlog();
+  await tlogSaveAll();
+}
+
+async function tlogUpdateNotes(id, notes) {
+  const entry = tlogEntries.find(e => e.id === id);
+  if (!entry) return;
+  entry.notes = notes;
+  await tlogSaveAll();
+}
+
+async function tlogDelete(id) {
+  if (!confirm("Remove this log entry?")) return;
+  tlogEntries = tlogEntries.filter(e => e.id !== id);
+  renderTlog();
+  await tlogSaveAll();
+}
+
+async function tlogSaveAll() {
+  const { sha } = await tlogRead(); // get fresh SHA before writing
+  tlogSHA = sha;
+  await tlogWrite(tlogEntries, tlogSHA);
+}
+
+function tlogExportCSV() {
+  const headers = ["Date","Time","Direction","Score","Strike","Entry","Exit","P&L%","Outcome","Vol","VIX","IVR","PCR","Regime","Notes"];
+  const rows = tlogEntries.map(e => {
+    const pnl = e.exitPrice && e.entryPrice
+      ? ((e.exitPrice - e.entryPrice) / e.entryPrice * 100).toFixed(1)
+      : "";
+    return [e.date, e.time, e.direction, e.score, e.strike,
+            e.entryPrice, e.exitPrice, pnl, e.outcome,
+            e.volLabel?.split("—")[0]?.trim(),
+            e.vix, e.ivRank, e.pcr, e.regime?.replace(/[^\w\s]/gu,""), e.notes
+    ].map(v => `"${v ?? ""}"`).join(",");
+  });
+  const csv  = [headers.join(","), ...rows].join("\n");
+  const blob = new Blob([csv], {type:"text/csv"});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement("a");
+  a.href = url; a.download = `trading_log_${new Date().toISOString().slice(0,10)}.csv`;
+  a.click(); URL.revokeObjectURL(url);
+}
+
 function addSignalLog(time, sig, inputs) {
   const logEl = document.getElementById("sigLog");
-  const dirColor = sig.type === "CE" ? "#22c55e" : sig.type === "PE" ? "#ef4444" : "#f59e0b";
+  const dirColor  = sig.type === "CE" ? "#22c55e" : sig.type === "PE" ? "#ef4444" : "#f59e0b";
   const probColor = sig.prob?.color || "#f59e0b";
   const row = document.createElement("div");
   row.className = "sig-log-row";
@@ -3527,6 +3976,16 @@ async function runSignalEngine(force = false) {
     const dayChg    = spot - prevClose;
     const dayChgPct = prevClose > 0 ? (dayChg / prevClose * 100) : 0;
 
+    // Compute volume confirmation
+    const volData = await computeVolumeConfirmation(null); // direction unknown yet
+    // Update UI volume rows
+    const siVol    = document.getElementById("si-vol");
+    const siVolAvg = document.getElementById("si-volavg");
+    if (siVol)    siVol.textContent = volData.todayVolFmt;
+    if (siVolAvg) {
+      siVolAvg.innerHTML = `${(volData.volRatio*100).toFixed(0)}% of 20d avg <span class="vol-badge ${volData.volClass}">${volData.volLabel?.split("—")[1]?.trim() || ""}</span>`;
+    }
+
     // Compute S/R levels and regime
     const srLevels  = await computeSRLevels(spot);
     const srCtx     = getSRContext(spot, srLevels);
@@ -3535,7 +3994,7 @@ async function runSignalEngine(force = false) {
     const regime    = classifyRegime(vix, ivRank, vixPercentile, dayChgPct, breadthPct);
     renderRegime(regime);
 
-    const inputs = { spot, prevClose, dayChg, dayChgPct, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty: srCtx.srScorePenalty };
+    const inputs = { spot, prevClose, dayChg, dayChgPct, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty: srCtx.srScorePenalty, volScore: volData.volScore, volLabel: volData.volLabel };
     const sig = computeSignal(inputs);
     renderSignal(sig, inputs);
 

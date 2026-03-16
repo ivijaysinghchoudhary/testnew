@@ -3490,26 +3490,26 @@ function renderSignal(sig, inputs) {
   renderProbabilityScore(prob);
   sig.prob = prob;
 
-  // Entry price via Black-Scholes
+  // Entry price via Black-Scholes (shown first as fast estimate)
   if (sig.type && sig.primaryStrike) {
     const ep = calcOptionEntry(inputs.spot, sig.primaryStrike, sig.type, sig.expiry?.daysToExpiry || 5, inputs.vix);
-    document.getElementById("sigEntryPrice").textContent  = `₹${ep.entryMid}`;
+    document.getElementById("sigEntryPrice").textContent  = `₹${ep.entryMid} (BS est.)`;
     document.getElementById("sigEntryRange").textContent  = `Range: ₹${ep.entryLow} – ₹${ep.entryHigh}`;
     document.getElementById("sigExitPrice").textContent   = `₹${ep.slPrice}`;
     document.getElementById("sigExitNote").textContent    = `Exit if falls to ₹${ep.slPrice} (–30%)`;
     document.getElementById("sigEntryNote").innerHTML     =
-      `<strong style="color:var(--text)">Entry guide:</strong> Enter between ₹${ep.entryLow}–₹${ep.entryHigh} · ` +
-      `Fair value ~₹${ep.fairValue} (Black-Scholes, VIX ${inputs.vix.toFixed(1)}) · ` +
-      `Do not chase if premium &gt; ₹${Math.round(ep.entryHigh * 1.1)} — wait for pullback`;
-
-    // Update targets to show actual exit prices
+      `⟳ Fetching live NSE price... (Black-Scholes est: ₹${ep.entryMid})`;
     document.getElementById("sigT1").textContent = `₹${ep.t1Price} (~+50%)`;
     document.getElementById("sigT2").textContent = `₹${ep.t2Price} (~+100%)`;
     document.getElementById("sigT3").textContent = `₹${ep.t3Price} (~+180%)`;
     document.getElementById("sigT1").style.color = "#84cc16";
     document.getElementById("sigT2").style.color = "#22c55e";
     document.getElementById("sigT3").style.color = "#22c55e";
-    document.getElementById("sigSL").textContent = `🛑 SL: Exit at ₹${ep.slPrice} · Entry ~₹${ep.entryMid} · Max loss ~₹${Math.round((ep.entryMid - ep.slPrice) * 25)} per lot (25 qty)`;
+    document.getElementById("sigSL").textContent = `🛑 SL: Exit at ₹${ep.slPrice} · Entry ~₹${ep.entryMid} · Max loss ~₹${Math.round((ep.entryMid - ep.slPrice) * 25)} per lot`;
+    sig.entryMid = ep.entryMid;
+
+    // Then fetch real NSE price and override BS estimate
+    updateEntryPriceFromNSE(sig, inputs);
   } else {
     ["sigEntryPrice","sigEntryRange","sigExitPrice","sigExitNote","sigEntryNote"].forEach(id => {
       const el = document.getElementById(id);
@@ -4231,23 +4231,149 @@ function showDataSavings() {
   setTimeout(() => { toast.style.opacity = "0"; setTimeout(() => toast.remove(), 300); }, 5000);
 }
 
+/* ─── KV SNAPSHOT LOADER ─── */
+// On page load, reads latest market snapshot from Worker KV
+// This populates the dashboard instantly even if browser was closed all day
+
+async function loadKVSnapshot() {
+  try {
+    const snap = await wFetch("/snapshot/latest", null);
+    if (!snap || snap.error) return;
+
+    const snapDate = snap.date;
+    const today    = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}))
+      .toLocaleDateString("en-CA"); // YYYY-MM-DD
+
+    // Only apply if snapshot is from today
+    if (snapDate !== today) {
+      console.log(`KV snapshot is from ${snapDate}, not today (${today}) — skipping`);
+      return;
+    }
+
+    console.log(`✓ KV snapshot loaded: ${snap.date} ${snap.time}`);
+
+    // Populate Nifty price if not yet loaded
+    const priceEl = document.getElementById("price");
+    if (snap.nifty && (!priceEl.textContent || priceEl.textContent === "Loading...")) {
+      const { last, prevClose, pChange } = snap.nifty;
+      const change = last - prevClose;
+      const color  = change >= 0 ? "#22c55e" : "#ef4444";
+      priceEl.textContent = "₹" + last.toFixed(2);
+      priceEl.style.color = color;
+      document.getElementById("change").textContent = (change >= 0 ? "▲ " : "▼ ") + Math.abs(change).toFixed(2) + " (" + Math.abs(pChange).toFixed(2) + "%)";
+      document.getElementById("change").style.color = color;
+    }
+
+    // Populate VIX
+    if (snap.vix) {
+      const vixEl = document.getElementById("idx-vix");
+      if (vixEl && vixEl.textContent === "—") {
+        vixEl.textContent = snap.vix.last.toFixed(2);
+        vixEl.style.color = snap.vix.last >= 20 ? "#ef4444" : snap.vix.last >= 16 ? "#f59e0b" : "#22c55e";
+      }
+    }
+
+    // Show KV load notice
+    const upd = document.getElementById("lastUpdated");
+    if (upd) upd.textContent = `${snap.time} (KV)`;
+
+  } catch(e) {
+    console.log("KV snapshot load failed:", e.message);
+  }
+}
+
+/* ─── REAL OPTION PRICE FETCHER ─── */
+// Replaces Black-Scholes with actual NSE bid/ask from Worker
+async function fetchRealOptionPrice(strike, type) {
+  try {
+    const data = await wFetch(`/option/price?strike=${strike}&type=${type}`, null);
+    if (!data || data.error) return null;
+    return data;
+  } catch { return null; }
+}
+
+// Called from renderSignal — replaces BS pricing with real NSE prices
+async function updateEntryPriceFromNSE(sig, inputs) {
+  if (!sig.type || !sig.primaryStrike) return;
+  try {
+    const ep = await fetchRealOptionPrice(sig.primaryStrike, sig.type);
+    if (!ep || !ep.midPrice) return;
+
+    // Update entry price display with real data
+    document.getElementById("sigEntryPrice").textContent  = `₹${ep.midPrice}`;
+    document.getElementById("sigEntryRange").textContent  = `Bid:₹${ep.bid} Ask:₹${ep.ask}`;
+    document.getElementById("sigExitPrice").textContent   = `₹${ep.slPrice}`;
+    document.getElementById("sigExitNote").textContent    = `Exit if falls to ₹${ep.slPrice} (–30%)`;
+
+    // Update targets with real premium base
+    document.getElementById("sigT1").textContent = `₹${ep.t1Price} (~+50%)`;
+    document.getElementById("sigT2").textContent = `₹${ep.t2Price} (~+100%)`;
+    document.getElementById("sigT3").textContent = `₹${ep.t3Price} (~+180%)`;
+    document.getElementById("sigT1").style.color = "#84cc16";
+    document.getElementById("sigT2").style.color = "#22c55e";
+    document.getElementById("sigT3").style.color = "#22c55e";
+    document.getElementById("sigSL").textContent = `🛑 SL: Exit at ₹${ep.slPrice} · Entry ~₹${ep.midPrice} (Live NSE) · Max loss ~₹${Math.round((ep.midPrice - ep.slPrice) * 25)} per lot`;
+
+    // Update entry note with live data source label
+    document.getElementById("sigEntryNote").innerHTML =
+      `<strong style="color:var(--green)">✓ Live NSE Price</strong> · Bid ₹${ep.bid} / Ask ₹${ep.ask} · IV: ${ep.iv?.toFixed(1) || "—"}% · OI: ${ep.oi?.toLocaleString("en-IN") || "—"} ` +
+      `<span style="color:var(--muted)">· Do not chase above ₹${(ep.ask * 1.05).toFixed(1)}</span>`;
+
+    // Store real entry price on sig for trading log
+    sig.entryMid   = ep.midPrice;
+    sig.entryLive  = true;
+
+  } catch(e) {
+    console.log("Real option price fetch failed:", e.message);
+  }
+}
+
+/* ─── DAILY RESET ─── */
+// Auto-resets intraday data at market close (15:31 IST)
+function setupDailyReset() {
+  setInterval(() => {
+    const now  = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
+    const mins = now.getHours() * 60 + now.getMinutes();
+    if (mins === 931) { // 15:31 IST
+      console.log("Market closed — resetting intraday data");
+      // Reset PCR chart history
+      pcrHistory.labels = []; pcrHistory.values = [];
+      pcrHistory.smr = []; pcrHistory.colors = [];
+      if (pcrChartInstance) pcrChartInstance.update();
+      // Reset S/R cache
+      cachedSRLevels = null; cachedSRSpot = 0;
+      // Reset vol cache
+      cachedVolData = null; cachedVolDate = null;
+      // Reset 52w high cache
+      nifty52wHigh = null;
+      console.log("✓ Daily reset complete");
+    }
+  }, 60000); // check every minute
+}
+
 /* ─── BOOT ─── */
 updateClock();
 updateRefreshIndicator();
 startCountdown();
-trackedFetchNifty();
-trackedLoadIndices();
-trackedLoadGlobal();
-trackedLoadGiftPanel();
-trackedLoadCommodities();
-trackedLoadTicker();
-ghLoadPCRHistory().then(() => trackedLoadPCR());
-trackedLoadAdvDecline();
-trackedLoad52Week();
-trackedLoadAnnouncements();
-trackedLoadFIIDII();
-trackedLoadSectorHeatmap();
-initSignalEngine();
+
+// Load KV snapshot first for instant data population
+loadKVSnapshot().then(() => {
+  // Then fetch live data
+  trackedFetchNifty();
+  trackedLoadIndices();
+  trackedLoadGlobal();
+  trackedLoadGiftPanel();
+  trackedLoadCommodities();
+  trackedLoadTicker();
+  ghLoadPCRHistory().then(() => trackedLoadPCR());
+  trackedLoadAdvDecline();
+  trackedLoad52Week();
+  trackedLoadAnnouncements();
+  trackedLoadFIIDII();
+  trackedLoadSectorHeatmap();
+  initSignalEngine();
+  tlogLoad();
+});
 
 fetchRSS("https://timesofindia.indiatimes.com/rssfeeds/1898055.cms", "toi");
 fetchRSS("https://www.livemint.com/rss/markets", "livemint");
@@ -4256,6 +4382,8 @@ trackData('rss');
 
 setInterval(updateClock, 1000);
 startIntervals();
+setupDailyReset();
+
 
 
 

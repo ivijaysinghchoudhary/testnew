@@ -1138,7 +1138,10 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
 
     <!-- Current PCR reading -->
     <div class="pcr-display">
-      <div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px">NIFTY PCR · VIX-Derived · Updates every 15 min</div>
+      <div style="font-size:0.7rem;color:var(--muted);margin-bottom:4px;display:flex;justify-content:space-between;align-items:center">
+        <span>NIFTY PCR · Updates every 15 min</span>
+        <span id="pcrLastUpdated" style="color:var(--muted);font-size:0.65rem">—</span>
+      </div>
       <div style="display:flex;align-items:baseline;gap:12px;justify-content:center">
         <div id="pcrValue" class="pcr-value" style="color:var(--yellow)">—</div>
         <div id="pcrLabel" style="font-size:0.75rem;color:var(--muted2)">Loading...</div>
@@ -1165,7 +1168,9 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
           <span id="pcrSessionLabel" style="color:var(--accent)"></span>
         </div>
       </div>
-      <canvas id="pcrChart" height="140" style="width:100%;display:block"></canvas>
+      <div style="position:relative;height:160px;width:100%;max-height:160px;overflow:hidden">
+        <canvas id="pcrChart" style="max-height:160px"></canvas>
+      </div>
       <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:0.65rem;color:var(--muted)">
         <span>09:15</span><span>11:00</span><span>12:30</span><span>14:00</span><span>15:30</span>
       </div>
@@ -1594,16 +1599,27 @@ const WORKER_URL = "https://choudhary-dashboard.ivijaysinghchoudhary.workers.dev
 // Fallback proxy (used only if Worker is unavailable)
 const proxy = "https://api.allorigins.win/raw?url=";
 
-// Worker fetch helper — falls back to Yahoo via proxy if Worker fails
+// Worker fetch helper — retries once, then falls back to Yahoo via proxy
 async function wFetch(path, fallbackFn) {
-  try {
-    const r = await fetch(WORKER_URL + path, { signal: AbortSignal.timeout(5000) });
-    if (!r.ok) throw new Error("Worker " + r.status);
+  const tryWorker = async (timeoutMs) => {
+    const r = await fetch(WORKER_URL + path, { signal: AbortSignal.timeout(timeoutMs) });
+    if (!r.ok) throw new Error("Worker HTTP " + r.status);
     return await r.json();
-  } catch(e) {
-    console.warn("Worker failed (" + path + "):", e.message, "— using fallback");
-    if (fallbackFn) return await fallbackFn();
-    throw e;
+  };
+
+  // Attempt 1 — 8s timeout
+  try {
+    return await tryWorker(8000);
+  } catch(e1) {
+    // Attempt 2 — retry once with 10s timeout before giving up
+    try {
+      console.warn(`Worker retry (${path}):`, e1.message);
+      return await tryWorker(10000);
+    } catch(e2) {
+      console.warn(`Worker failed both attempts (${path}):`, e2.message, "— using fallback");
+      if (fallbackFn) return await fallbackFn();
+      throw e2;
+    }
   }
 }
 
@@ -1690,17 +1706,23 @@ async function fetchNifty() {
       const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI"));
       const j = await r.json();
       const m = j.chart.result[0].meta;
-      return { indices: [{ name:"NIFTY 50", last: m.regularMarketPrice, prevClose: m.previousClose, change: m.regularMarketPrice - m.previousClose, pChange: ((m.regularMarketPrice - m.previousClose)/m.previousClose*100).toFixed(2) }] };
+      return { indices: [{ name:"NIFTY 50", last: m.regularMarketPrice, prevClose: m.previousClose }] };
     });
     const nifty = d.indices?.find(i => i.name === "NIFTY 50");
     if (!nifty) return;
-    const price = nifty.last, change = nifty.change, pct = parseFloat(nifty.pChange).toFixed(2);
+
+    // Always recompute change from last - prevClose (don't trust NSE's change field — sign can mismatch)
+    const price    = parseFloat(nifty.last);
+    const prevClose= parseFloat(nifty.prevClose || nifty.previousClose || price);
+    const change   = price - prevClose;
+    const pct      = prevClose > 0 ? (change / prevClose * 100) : 0;
+
     const color = change >= 0 ? "#22c55e" : "#ef4444";
     document.getElementById("price").textContent = "₹" + price.toFixed(2);
     document.getElementById("price").style.color = color;
-    document.getElementById("change").textContent = (change >= 0 ? "▲ " : "▼ ") + Math.abs(change).toFixed(2) + " (" + Math.abs(pct) + "%)";
+    document.getElementById("change").textContent = (change >= 0 ? "▲ " : "▼ ") + Math.abs(change).toFixed(2) + " (" + Math.abs(pct).toFixed(2) + "%)";
     document.getElementById("change").style.color = color;
-    updateIndexCard("idx-nifty", "idx-nifty-c", price, change, pct);
+    updateIndexCard("idx-nifty", "idx-nifty-c", price, change, pct.toFixed(2));
   } catch { document.getElementById("price").textContent = "Unavailable"; }
 }
 
@@ -1723,21 +1745,25 @@ function updateIndexCard(priceId, changeId, price, change, pct) {
 async function loadIndices() {
   try {
     const d = await wFetch("/nse/indices", async () => {
-      // Yahoo fallback for each index
       const symbols = { "NIFTY BANK": "%5ENIFTYBANK", "NIFTY IT": "NIFTYIT.NS", "NIFTY MIDCAP 100": "%5ENIFTY_MIDCAP100", "INDIA VIX": "INDIAVIX.NS" };
       const indices = [];
       for (const [name, sym] of Object.entries(symbols)) {
         try {
           const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/" + sym));
           const j = await r.json(); const m = j.chart.result[0].meta;
-          indices.push({ name, last: m.regularMarketPrice, prevClose: m.previousClose, change: m.regularMarketPrice - m.previousClose, pChange: ((m.regularMarketPrice - m.previousClose)/m.previousClose*100).toFixed(2) });
+          indices.push({ name, last: m.regularMarketPrice, prevClose: m.previousClose });
         } catch {}
       }
       return { indices };
     });
     for (const idx of keyIndices) {
       const found = d.indices?.find(i => i.name === idx.name);
-      if (found) updateIndexCard("idx-" + idx.id, "idx-" + idx.id + "-c", found.last, found.change, parseFloat(found.pChange));
+      if (!found) continue;
+      const last     = parseFloat(found.last);
+      const prevClose= parseFloat(found.prevClose || found.previousClose || last);
+      const change   = last - prevClose;
+      const pct      = prevClose > 0 ? (change / prevClose * 100).toFixed(2) : "0.00";
+      updateIndexCard("idx-" + idx.id, "idx-" + idx.id + "-c", last, change, pct);
     }
   } catch {}
 }
@@ -2014,6 +2040,8 @@ function initPCRChart() {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      resizeDelay: 0,
+      layout: { padding: 0 },
       animation: { duration: 400 },
       interaction: { mode: "index", intersect: false },
       plugins: {
@@ -2306,6 +2334,14 @@ async function loadPCR() {
 
     updatePCRChart(pcrNum, label);
     await updateFearGreed(vix, pcrNum);
+
+    // Update last updated time on PCR panel
+    const pcrTs = document.getElementById("pcrLastUpdated");
+    if (pcrTs) {
+      const now = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
+      pcrTs.textContent = "Updated: " + now.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",second:"2-digit",hour12:true});
+      pcrTs.style.color = "#22c55e";
+    }
   } catch { document.getElementById("pcrValue").textContent = "N/A"; }
 }
 

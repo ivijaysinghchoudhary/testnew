@@ -1768,48 +1768,50 @@ async function loadIndices() {
   } catch {}
 }
 
-/* ─── GLOBAL MARKETS — Stooq direct (no batch, fixes encoding bug) ─── */
+/* ─── GLOBAL MARKETS — Yahoo via Worker (most reliable) ─── */
 async function loadGlobal() {
   const markets = [
-    { name: "Dow Jones",  stooq: "%5edji"   },
-    { name: "Nasdaq",     stooq: "%5endx"   },
-    { name: "S&P 500",    stooq: "%5espx"   },
-    { name: "FTSE 100",   stooq: "%5eftse"  },
-    { name: "Nikkei 225", stooq: "%5enkx"   },
-    { name: "DAX",        stooq: "%5edax"   },
-    { name: "Hang Seng",  stooq: "%5ehsi"   },
-    { name: "SGX Nifty",  stooq: "nifty.in" },
+    { name: "Dow Jones",  yahoo: "%5EDJI"     },
+    { name: "Nasdaq",     yahoo: "%5EIXIC"    },
+    { name: "S&P 500",    yahoo: "%5EGSPC"    },
+    { name: "FTSE 100",   yahoo: "%5EFTSE"    },
+    { name: "Nikkei 225", yahoo: "%5EN225"    },
+    { name: "DAX",        yahoo: "%5EGDAXI"   },
+    { name: "Hang Seng",  yahoo: "%5EHSI"     },
+    { name: "SGX Nifty",  yahoo: "%5ENSEI"    },
   ];
   let html = "";
 
-  // Fetch all in parallel directly from Stooq — no batch, no encoding issue
+  // Fetch all in parallel via Worker /yahoo route (or proxy fallback)
   const results = await Promise.allSettled(markets.map(async m => {
-    // Try Worker first, then direct Stooq
     try {
-      const d = await wFetch(`/stooq?s=${m.stooq}`, async () => {
-        const r = await fetch(`https://stooq.com/q/l/?s=${m.stooq}&f=sd2t2ohlcv&e=csv`, { signal: AbortSignal.timeout(5000) });
-        const text = await r.text();
-        const vals = text.trim().split("\n")[1]?.split(",");
-        if (!vals || vals.length < 5 || vals[4] === "N/A") return null;
-        return { close: parseFloat(vals[4]), open: parseFloat(vals[2]) };
+      // Try Worker first — it fetches Yahoo server-side without CORS
+      const d = await wFetch(`/yahoo?s=${m.yahoo}`, async () => {
+        // Direct fallback via allorigins proxy
+        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${m.yahoo}`;
+        const r   = await fetch(proxy + encodeURIComponent(url), { signal: AbortSignal.timeout(6000) });
+        const j   = await r.json();
+        const meta = j.chart.result[0].meta;
+        return { price: meta.regularMarketPrice, prevClose: meta.previousClose, name: m.name };
       });
-      if (!d || !d.close || isNaN(d.close) || d.close <= 0) return { name: m.name, unavailable: true };
-      return { name: m.name, close: d.close, open: d.open || d.close };
+      if (!d || !d.price) return { name: m.name, unavailable: true };
+      return { name: m.name, price: d.price, prevClose: d.prevClose || d.price };
     } catch {
       return { name: m.name, unavailable: true };
     }
   }));
 
   for (const res of results) {
-    const m = res.status === "fulfilled" ? res.value : { name: "?", unavailable: true };
-    if (m.unavailable) {
-      html += `<div class="data-row"><span class="label">${m.name}</span><span class="val" style="color:var(--muted)">Market closed</span></div>`;
+    const m = res.status === "fulfilled" ? res.value : null;
+    if (!m || m.unavailable) {
+      const name = markets[results.indexOf(res)]?.name || "—";
+      html += `<div class="data-row"><span class="label">${name}</span><span class="val" style="color:var(--muted)">—</span></div>`;
       continue;
     }
-    const ch    = m.close - m.open;
-    const pct   = m.open > 0 ? (ch / m.open * 100).toFixed(2) : "0.00";
+    const ch    = m.price - m.prevClose;
+    const pct   = m.prevClose > 0 ? (ch / m.prevClose * 100).toFixed(2) : "0.00";
     const color = ch >= 0 ? "#22c55e" : "#ef4444";
-    html += `<div class="data-row"><span class="label">${m.name}</span><span class="val" style="color:${color}">${m.close.toFixed(2)} <small>(${pct}%)</small></span></div>`;
+    html += `<div class="data-row"><span class="label">${m.name}</span><span class="val" style="color:${color}">${m.price.toFixed(2)} <small>(${pct}%)</small></span></div>`;
   }
 
   document.getElementById("global").innerHTML = html || "<div style='color:var(--muted)'>Unavailable</div>";
@@ -1842,44 +1844,42 @@ async function loadGiftPanel() {
   }
 }
 
-/* ─── COMMODITIES — all via Stooq + Frankfurter (reliable, no metals.live) ─── */
+/* ─── COMMODITIES — Yahoo via Worker + Frankfurter for forex ─── */
 async function loadCommodities() {
   let html = "";
 
-  // All commodities via Stooq in parallel
   const commodMap = [
-    { name: "WTI Crude",   stooq: "cl.f"  },
-    { name: "Brent Crude", stooq: "co.f"  },
-    { name: "Gold (oz)",   stooq: "xauusd"},
-    { name: "Silver (oz)", stooq: "xagusd"},
+    { name: "WTI Crude",   yahoo: "CL%3DF"   },  // CL=F
+    { name: "Brent Crude", yahoo: "BZ%3DF"   },  // BZ=F
+    { name: "Gold (oz)",   yahoo: "GC%3DF"   },  // GC=F
+    { name: "Silver (oz)", yahoo: "SI%3DF"   },  // SI=F
   ];
 
   const [commResults, forexResult] = await Promise.allSettled([
-    // Commodities — Stooq
+    // Commodities via Worker /yahoo route
     Promise.allSettled(commodMap.map(async c => {
       try {
-        const d = await wFetch(`/stooq?s=${c.stooq}`, async () => {
-          const r = await fetch(`https://stooq.com/q/l/?s=${c.stooq}&f=sd2t2ohlcv&e=csv`, { signal: AbortSignal.timeout(5000) });
-          const text = await r.text();
-          const vals = text.trim().split("\n")[1]?.split(",");
-          if (!vals || vals[4] === "N/A" || !vals[4]) return null;
-          return { close: parseFloat(vals[4]), open: parseFloat(vals[2]) };
+        const d = await wFetch(`/yahoo?s=${c.yahoo}`, async () => {
+          const url = `https://query1.finance.yahoo.com/v8/finance/chart/${c.yahoo}`;
+          const r   = await fetch(proxy + encodeURIComponent(url), { signal: AbortSignal.timeout(6000) });
+          const j   = await r.json();
+          const meta = j.chart.result[0].meta;
+          return { price: meta.regularMarketPrice, prevClose: meta.previousClose };
         });
-        if (!d || !d.close || isNaN(d.close) || d.close <= 0) return { name: c.name, unavailable: true };
-        return { name: c.name, close: d.close, open: d.open || d.close };
+        if (!d?.price) return { name: c.name, unavailable: true };
+        return { name: c.name, price: d.price, prevClose: d.prevClose || d.price };
       } catch { return { name: c.name, unavailable: true }; }
     })),
 
-    // Forex — Frankfurter API (free, reliable, no auth needed)
+    // Forex via Frankfurter (free, no auth, reliable)
     (async () => {
       try {
-        const r = await fetch("https://api.frankfurter.app/latest?from=USD&to=INR,EUR", { signal: AbortSignal.timeout(5000) });
-        const d = await r.json();
-        const usdInr = d.rates?.INR;
-        // EUR/INR: get EUR/USD first then compute
-        const r2 = await fetch("https://api.frankfurter.app/latest?from=EUR&to=INR", { signal: AbortSignal.timeout(5000) });
-        const d2 = await r2.json();
-        return { usdInr, eurInr: d2.rates?.INR };
+        const [r1, r2] = await Promise.all([
+          fetch("https://api.frankfurter.app/latest?from=USD&to=INR", { signal: AbortSignal.timeout(5000) }),
+          fetch("https://api.frankfurter.app/latest?from=EUR&to=INR", { signal: AbortSignal.timeout(5000) }),
+        ]);
+        const [d1, d2] = await Promise.all([r1.json(), r2.json()]);
+        return { usdInr: d1.rates?.INR, eurInr: d2.rates?.INR };
       } catch { return null; }
     })(),
   ]);
@@ -1889,23 +1889,20 @@ async function loadCommodities() {
   for (const res of commArr) {
     const c = res.status === "fulfilled" ? res.value : null;
     if (!c || c.unavailable) {
-      const name = commodMap[commArr.indexOf(res)]?.name || "—";
-      html += `<div class="data-row"><span class="label">${name}</span><span class="val" style="color:var(--muted)">—</span></div>`;
+      html += `<div class="data-row"><span class="label">${c?.name || "—"}</span><span class="val" style="color:var(--muted)">—</span></div>`;
       continue;
     }
-    const ch    = c.close - c.open;
-    const pct   = c.open > 0 ? (ch / c.open * 100).toFixed(2) : "0.00";
+    const ch    = c.price - c.prevClose;
+    const pct   = c.prevClose > 0 ? (ch / c.prevClose * 100).toFixed(2) : "0.00";
     const color = ch >= 0 ? "#22c55e" : "#ef4444";
-    html += `<div class="data-row"><span class="label">${c.name}</span><span class="val" style="color:${color}">${c.close.toFixed(2)} <small>(${pct}%)</small></span></div>`;
+    html += `<div class="data-row"><span class="label">${c.name}</span><span class="val" style="color:${color}">${c.price.toFixed(2)} <small>(${pct}%)</small></span></div>`;
   }
 
   // Render forex
   const forex = forexResult.status === "fulfilled" ? forexResult.value : null;
   if (forex?.usdInr) {
     html += `<div class="data-row"><span class="label">USD/INR</span><span class="val" style="color:var(--text)">₹${parseFloat(forex.usdInr).toFixed(2)}</span></div>`;
-    if (forex.eurInr) {
-      html += `<div class="data-row"><span class="label">EUR/INR</span><span class="val" style="color:var(--text)">₹${parseFloat(forex.eurInr).toFixed(2)}</span></div>`;
-    }
+    if (forex.eurInr) html += `<div class="data-row"><span class="label">EUR/INR</span><span class="val" style="color:var(--text)">₹${parseFloat(forex.eurInr).toFixed(2)}</span></div>`;
   } else {
     html += `<div class="data-row"><span class="label">USD/INR</span><span class="val" style="color:var(--muted)">—</span></div>`;
     html += `<div class="data-row"><span class="label">EUR/INR</span><span class="val" style="color:var(--muted)">—</span></div>`;

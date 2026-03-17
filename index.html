@@ -1768,52 +1768,50 @@ async function loadIndices() {
   } catch {}
 }
 
-/* ─── GLOBAL MARKETS — via Stooq (Worker batches, direct fallback) ─── */
+/* ─── GLOBAL MARKETS — Stooq direct (no batch, fixes encoding bug) ─── */
 async function loadGlobal() {
   const markets = [
-    { name: "Dow Jones",  stooq: "^dji"  },
-    { name: "Nasdaq",     stooq: "^ndx"  },
-    { name: "S&P 500",    stooq: "^spx"  },
-    { name: "FTSE 100",   stooq: "^ftse" },
-    { name: "Nikkei 225", stooq: "^nkx"  },
-    { name: "DAX",        stooq: "^dax"  },
-    { name: "Hang Seng",  stooq: "^hsi"  },
+    { name: "Dow Jones",  stooq: "%5edji"   },
+    { name: "Nasdaq",     stooq: "%5endx"   },
+    { name: "S&P 500",    stooq: "%5espx"   },
+    { name: "FTSE 100",   stooq: "%5eftse"  },
+    { name: "Nikkei 225", stooq: "%5enkx"   },
+    { name: "DAX",        stooq: "%5edax"   },
+    { name: "Hang Seng",  stooq: "%5ehsi"   },
     { name: "SGX Nifty",  stooq: "nifty.in" },
   ];
   let html = "";
-  try {
-    // Batch all via Worker /stooq/batch
-    const syms = markets.map(m => m.stooq).join(",");
-    const batch = await wFetch(`/stooq/batch?s=${encodeURIComponent(syms)}`, null);
-    const bySymbol = {};
-    (Array.isArray(batch) ? batch : []).forEach(item => { bySymbol[item.symbol] = item; });
 
-    for (const m of markets) {
-      const item = bySymbol[m.stooq];
-      if (!item || item.error || !item.close) continue;
-      // Stooq gives OHLC but not prev close directly — use open as proxy for prev close
-      const p   = item.close;
-      const ch  = item.close - item.open;
-      const pct = item.open > 0 ? (ch / item.open * 100).toFixed(2) : "0.00";
-      const color = ch >= 0 ? "#22c55e" : "#ef4444";
-      html += `<div class="data-row"><span class="label">${m.name}</span><span class="val" style="color:${color}">${p.toFixed(2)} <small>(${pct}%)</small></span></div>`;
-    }
-  } catch {
-    // Fallback: direct Stooq CSV (works without proxy)
-    for (const m of markets) {
-      try {
-        const r = await fetch(`https://stooq.com/q/l/?s=${m.stooq}&f=sd2t2ohlcv&e=csv`, { signal: AbortSignal.timeout(4000) });
+  // Fetch all in parallel directly from Stooq — no batch, no encoding issue
+  const results = await Promise.allSettled(markets.map(async m => {
+    // Try Worker first, then direct Stooq
+    try {
+      const d = await wFetch(`/stooq?s=${m.stooq}`, async () => {
+        const r = await fetch(`https://stooq.com/q/l/?s=${m.stooq}&f=sd2t2ohlcv&e=csv`, { signal: AbortSignal.timeout(5000) });
         const text = await r.text();
         const vals = text.trim().split("\n")[1]?.split(",");
-        if (!vals || vals.length < 5) continue;
-        const p = parseFloat(vals[4]);
-        const o = parseFloat(vals[2]);
-        const ch = p - o, pct = o > 0 ? (ch / o * 100).toFixed(2) : "0.00";
-        const color = ch >= 0 ? "#22c55e" : "#ef4444";
-        html += `<div class="data-row"><span class="label">${m.name}</span><span class="val" style="color:${color}">${p.toFixed(2)} <small>(${pct}%)</small></span></div>`;
-      } catch {}
+        if (!vals || vals.length < 5 || vals[4] === "N/A") return null;
+        return { close: parseFloat(vals[4]), open: parseFloat(vals[2]) };
+      });
+      if (!d || !d.close || isNaN(d.close) || d.close <= 0) return { name: m.name, unavailable: true };
+      return { name: m.name, close: d.close, open: d.open || d.close };
+    } catch {
+      return { name: m.name, unavailable: true };
     }
+  }));
+
+  for (const res of results) {
+    const m = res.status === "fulfilled" ? res.value : { name: "?", unavailable: true };
+    if (m.unavailable) {
+      html += `<div class="data-row"><span class="label">${m.name}</span><span class="val" style="color:var(--muted)">Market closed</span></div>`;
+      continue;
+    }
+    const ch    = m.close - m.open;
+    const pct   = m.open > 0 ? (ch / m.open * 100).toFixed(2) : "0.00";
+    const color = ch >= 0 ? "#22c55e" : "#ef4444";
+    html += `<div class="data-row"><span class="label">${m.name}</span><span class="val" style="color:${color}">${m.close.toFixed(2)} <small>(${pct}%)</small></span></div>`;
   }
+
   document.getElementById("global").innerHTML = html || "<div style='color:var(--muted)'>Unavailable</div>";
 }
 
@@ -1844,77 +1842,75 @@ async function loadGiftPanel() {
   }
 }
 
-/* ─── COMMODITIES — metals.live + ExchangeRate-API + Stooq ─── */
+/* ─── COMMODITIES — all via Stooq + Frankfurter (reliable, no metals.live) ─── */
 async function loadCommodities() {
   let html = "";
-  try {
-    // Gold + Silver from metals.live via Worker (or direct)
-    let gold = null, silver = null;
-    try {
-      const metals = await wFetch("/metals", async () => {
-        const r = await fetch("https://metals.live/api/v1/latest", { signal: AbortSignal.timeout(4000) });
-        return await r.json();
-      });
-      // metals.live returns array [{metal, price}] or object
-      if (Array.isArray(metals)) {
-        gold   = metals.find(m => m.metal?.toUpperCase().includes("XAU") || m.metal?.toUpperCase() === "GOLD")?.price;
-        silver = metals.find(m => m.metal?.toUpperCase().includes("XAG") || m.metal?.toUpperCase() === "SILVER")?.price;
-      } else {
-        gold   = metals.XAU || metals.gold;
-        silver = metals.XAG || metals.silver;
-      }
-    } catch {}
 
-    // Forex: USD/INR + EUR/INR from ExchangeRate-API via Worker (or direct)
-    let usdInr = null, eurInr = null;
-    try {
-      const forex = await wFetch("/forex?base=USD", async () => {
-        const r = await fetch("https://open.er-api.com/v6/latest/USD", { signal: AbortSignal.timeout(4000) });
-        return await r.json();
-      });
-      usdInr = forex.rates?.INR;
-      if (usdInr) {
-        // EUR/INR = (1/EUR-USD) * USD-INR
-        const eurUsd = forex.rates?.EUR;
-        eurInr = eurUsd ? (usdInr / eurUsd) : null;
-      }
-    } catch {}
+  // All commodities via Stooq in parallel
+  const commodMap = [
+    { name: "WTI Crude",   stooq: "cl.f"  },
+    { name: "Brent Crude", stooq: "co.f"  },
+    { name: "Gold (oz)",   stooq: "xauusd"},
+    { name: "Silver (oz)", stooq: "xagusd"},
+  ];
 
-    // Crude from Stooq via Worker (or direct)
-    let wti = null, brent = null;
-    try {
-      const batch = await wFetch("/stooq/batch?s=cl.f,co.f", async () => {
-        const results = [];
-        for (const s of ["cl.f", "co.f"]) {
-          const r = await fetch(`https://stooq.com/q/l/?s=${s}&f=sd2t2ohlcv&e=csv`, { signal: AbortSignal.timeout(4000) });
+  const [commResults, forexResult] = await Promise.allSettled([
+    // Commodities — Stooq
+    Promise.allSettled(commodMap.map(async c => {
+      try {
+        const d = await wFetch(`/stooq?s=${c.stooq}`, async () => {
+          const r = await fetch(`https://stooq.com/q/l/?s=${c.stooq}&f=sd2t2ohlcv&e=csv`, { signal: AbortSignal.timeout(5000) });
           const text = await r.text();
           const vals = text.trim().split("\n")[1]?.split(",");
-          results.push({ symbol: s, close: vals ? parseFloat(vals[4]) : 0, open: vals ? parseFloat(vals[2]) : 0 });
-        }
-        return results;
-      });
-      const arr = Array.isArray(batch) ? batch : [];
-      wti   = arr.find(b => b.symbol === "cl.f");
-      brent = arr.find(b => b.symbol === "co.f");
-    } catch {}
+          if (!vals || vals[4] === "N/A" || !vals[4]) return null;
+          return { close: parseFloat(vals[4]), open: parseFloat(vals[2]) };
+        });
+        if (!d || !d.close || isNaN(d.close) || d.close <= 0) return { name: c.name, unavailable: true };
+        return { name: c.name, close: d.close, open: d.open || d.close };
+      } catch { return { name: c.name, unavailable: true }; }
+    })),
 
-    // Build HTML rows
-    const row = (label, val, prev, unit = "") => {
-      if (!val) return `<div class="data-row"><span class="label">${label}</span><span class="val" style="color:var(--muted)">—</span></div>`;
-      const ch = prev ? val - prev : 0;
-      const pct = prev && prev > 0 ? (ch / prev * 100).toFixed(2) : "0.00";
-      const color = ch >= 0 ? "#22c55e" : "#ef4444";
-      return `<div class="data-row"><span class="label">${label}</span><span class="val" style="color:${color}">${unit}${parseFloat(val).toFixed(2)} <small>(${pct}%)</small></span></div>`;
-    };
+    // Forex — Frankfurter API (free, reliable, no auth needed)
+    (async () => {
+      try {
+        const r = await fetch("https://api.frankfurter.app/latest?from=USD&to=INR,EUR", { signal: AbortSignal.timeout(5000) });
+        const d = await r.json();
+        const usdInr = d.rates?.INR;
+        // EUR/INR: get EUR/USD first then compute
+        const r2 = await fetch("https://api.frankfurter.app/latest?from=EUR&to=INR", { signal: AbortSignal.timeout(5000) });
+        const d2 = await r2.json();
+        return { usdInr, eurInr: d2.rates?.INR };
+      } catch { return null; }
+    })(),
+  ]);
 
-    html += row("WTI Crude",   wti?.close,   wti?.open);
-    html += row("Brent Crude", brent?.close, brent?.open);
-    html += row("Gold (oz)",   gold,   null);
-    html += row("Silver (oz)", silver, null);
-    html += row("USD/INR",     usdInr, null, "₹");
-    html += row("EUR/INR",     eurInr, null, "₹");
+  // Render commodities
+  const commArr = commResults.status === "fulfilled" ? commResults.value : [];
+  for (const res of commArr) {
+    const c = res.status === "fulfilled" ? res.value : null;
+    if (!c || c.unavailable) {
+      const name = commodMap[commArr.indexOf(res)]?.name || "—";
+      html += `<div class="data-row"><span class="label">${name}</span><span class="val" style="color:var(--muted)">—</span></div>`;
+      continue;
+    }
+    const ch    = c.close - c.open;
+    const pct   = c.open > 0 ? (ch / c.open * 100).toFixed(2) : "0.00";
+    const color = ch >= 0 ? "#22c55e" : "#ef4444";
+    html += `<div class="data-row"><span class="label">${c.name}</span><span class="val" style="color:${color}">${c.close.toFixed(2)} <small>(${pct}%)</small></span></div>`;
+  }
 
-  } catch {}
+  // Render forex
+  const forex = forexResult.status === "fulfilled" ? forexResult.value : null;
+  if (forex?.usdInr) {
+    html += `<div class="data-row"><span class="label">USD/INR</span><span class="val" style="color:var(--text)">₹${parseFloat(forex.usdInr).toFixed(2)}</span></div>`;
+    if (forex.eurInr) {
+      html += `<div class="data-row"><span class="label">EUR/INR</span><span class="val" style="color:var(--text)">₹${parseFloat(forex.eurInr).toFixed(2)}</span></div>`;
+    }
+  } else {
+    html += `<div class="data-row"><span class="label">USD/INR</span><span class="val" style="color:var(--muted)">—</span></div>`;
+    html += `<div class="data-row"><span class="label">EUR/INR</span><span class="val" style="color:var(--muted)">—</span></div>`;
+  }
+
   document.getElementById("commodities").innerHTML = html || "<div style='color:var(--muted)'>Unavailable</div>";
 }
 
@@ -2347,21 +2343,25 @@ async function loadPCR() {
 
 
 /* ─── FEAR & GREED ─── */
-let nifty52wHigh = null; // cached from load52Week or fetched fresh
+let nifty52wHigh = null;
 
 async function fetchNifty52wHigh() {
   if (nifty52wHigh) return nifty52wHigh;
   try {
-    // Use Worker endpoint — cached 1hr, only Yahoo fallback if Worker down
-    const d = await wFetch("/nse/vixhistory", async () => {
+    // Use NSE nifty50 bulk data — already has yearHigh per stock
+    // Get Nifty index 52w high from NSE indices endpoint
+    const d = await wFetch("/nse/indices", async () => {
       const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=1y&interval=1d"));
       const j = await r.json();
       const closes = j.chart.result[0].indicators.quote[0].close.filter(v => v != null);
-      return { closes };
+      return { indices: [{ name: "NIFTY 50", yearHigh: Math.max(...closes), last: j.chart.result[0].meta.regularMarketPrice }] };
     });
-    const closes = d.closes || [];
-    nifty52wHigh = closes.length ? Math.max(...closes) : null;
-    return nifty52wHigh;
+    const nifty = d.indices?.find(i => i.name === "NIFTY 50");
+    if (nifty?.yearHigh) {
+      nifty52wHigh = parseFloat(nifty.yearHigh);
+      return nifty52wHigh;
+    }
+    return null;
   } catch { return null; }
 }
 
@@ -2659,54 +2659,61 @@ function updateFIISummary(suffix, rows) {
 
 async function loadFIIDII() {
   try {
-    const url = "https://www.nseindia.com/api/fiidiiTradeReact";
-    const r = await fetch(proxy + encodeURIComponent(url));
-    const data = await r.json();
+    // Fetch via Worker (handles NSE session/CORS)
+    const data = await wFetch("/nse/fiidii", async () => {
+      // Direct fallback via proxy
+      const r = await fetch(proxy + encodeURIComponent("https://www.nseindia.com/api/fiidiiTradeReact"));
+      return await r.json();
+    });
+
     const rows = (Array.isArray(data) ? data : []).slice(0, 15).map(item => ({
-      date:     item.date || item.trading_date || "—",
-      fiiBuy:   parseFloat(item.fii_buy_value  || item.fiiBuyValue  || 0),
-      fiiSell:  parseFloat(item.fii_sell_value || item.fiiSellValue || 0),
-      diiBuy:   parseFloat(item.dii_buy_value  || item.diiBuyValue  || 0),
-      diiSell:  parseFloat(item.dii_sell_value || item.diiSellValue || 0),
-    }));
+      date:    item.date || item.trading_date || "—",
+      fiiBuy:  parseFloat(item.fii_buy_value  || item.fiiBuyValue  || 0),
+      fiiSell: parseFloat(item.fii_sell_value || item.fiiSellValue || 0),
+      diiBuy:  parseFloat(item.dii_buy_value  || item.diiBuyValue  || 0),
+      diiSell: parseFloat(item.dii_sell_value || item.diiSellValue || 0),
+    })).filter(r => r.fiiBuy > 0 || r.fiiSell > 0);
+
     if (!rows.length) throw new Error("empty");
-    const todayRows = rows.slice(0, 1);
-    const weekRows  = rows.slice(0, 5);
-    const prevRows  = rows.slice(5, 10);
-    renderFIITable("fiiBodyToday",    todayRows);
+
+    // Row 0 = most recent trading day (yesterday or today after close)
+    const prevDayRows = rows.slice(0, 1);
+    const weekRows    = rows.slice(0, 5);
+    const prevRows    = rows.slice(5, 10);
+
+    renderFIITable("fiiBodyToday",    prevDayRows);
     renderFIITable("fiiBodyWeek",     weekRows);
     renderFIITable("fiiBodyPrevWeek", prevRows);
-    updateFIISummary("Today",    todayRows);
+    updateFIISummary("Today",    prevDayRows);
     updateFIISummary("Week",     weekRows);
     updateFIISummary("PrevWeek", prevRows);
-  } catch {
-    // Fallback: realistic simulated data when NSE blocks CORS
-    const today = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
-    const rows = [];
-    for (let i = 0; rows.length < 10; i++) {
-      const d = new Date(today); d.setDate(d.getDate() - i);
-      if (d.getDay() === 0 || d.getDay() === 6) continue;
-      rows.push({
-        date:    d.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"2-digit"}),
-        fiiBuy:  Math.round(8000 + Math.random() * 6000),
-        fiiSell: Math.round(7000 + Math.random() * 6000),
-        diiBuy:  Math.round(5000 + Math.random() * 4000),
-        diiSell: Math.round(4000 + Math.random() * 4000),
-      });
+
+    // Label as previous day with timestamp
+    const note = document.getElementById("fii-tab-today");
+    if (note) {
+      const existing = note.querySelector(".fii-source-note");
+      if (!existing) {
+        const div = document.createElement("div");
+        div.className = "fii-source-note";
+        div.style.cssText = "margin-top:8px;font-size:0.68rem;color:var(--muted);padding:5px 8px;background:var(--surface2);border-radius:6px";
+        div.innerHTML = `ℹ NSE publishes FII/DII data after market close (~6–7 PM IST). Showing most recent available day: <strong style="color:var(--text)">${prevDayRows[0]?.date || "—"}</strong>`;
+        note.appendChild(div);
+      }
     }
-    const todayRows = rows.slice(0, 1);
-    const weekRows  = rows.slice(0, 5);
-    const prevRows  = rows.slice(5, 10);
-    renderFIITable("fiiBodyToday",    todayRows);
-    renderFIITable("fiiBodyWeek",     weekRows);
-    renderFIITable("fiiBodyPrevWeek", prevRows);
-    updateFIISummary("Today",    todayRows);
-    updateFIISummary("Week",     weekRows);
-    updateFIISummary("PrevWeek", prevRows);
-    const note = document.createElement("div");
-    note.style.cssText = "margin-top:10px;font-size:0.7rem;color:var(--yellow);padding:6px 10px;background:rgba(245,158,11,0.08);border-radius:6px;border:1px solid rgba(245,158,11,0.2)";
-    note.innerHTML = "⚠ NSE live data blocked by CORS. Showing simulated figures. For live data visit <a href='https://www.nseindia.com/reports-indices-equity-fiidii' target='_blank' style='color:var(--accent)'>nseindia.com</a>";
-    document.getElementById("fii-tab-today").appendChild(note);
+
+  } catch {
+    // Clean fallback — show message, no fake data
+    const msg = `<tr><td colspan="7" style="padding:16px;text-align:center">
+      <div style="color:var(--muted2);font-size:0.78rem">NSE FII/DII data unavailable</div>
+      <div style="margin-top:6px;font-size:0.68rem;color:var(--muted)">
+        NSE publishes this after market close (~6–7 PM IST).<br>
+        View live at <a href="https://www.nseindia.com/reports-indices-equity-fiidii" target="_blank" style="color:var(--accent)">nseindia.com</a>
+      </div>
+    </td></tr>`;
+    ["fiiBodyToday","fiiBodyWeek","fiiBodyPrevWeek"].forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.innerHTML = msg;
+    });
   }
 }
 

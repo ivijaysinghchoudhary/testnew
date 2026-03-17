@@ -2000,6 +2000,16 @@ function smrColor(smr) {
 function initPCRChart() {
   const canvas = document.getElementById("pcrChart");
   if (!canvas) return;
+  // Don't create a second chart instance
+  if (pcrChartInstance) {
+    pcrChartInstance.data.labels                            = [...pcrHistory.labels];
+    pcrChartInstance.data.datasets[0].data                 = [...pcrHistory.values];
+    pcrChartInstance.data.datasets[0].pointBackgroundColor = [...pcrHistory.colors];
+    pcrChartInstance.data.datasets[0].pointBorderColor     = [...pcrHistory.colors];
+    pcrChartInstance.data.datasets[1].data                 = [...pcrHistory.smr];
+    pcrChartInstance.update();
+    return;
+  }
   const ctx = canvas.getContext("2d");
   pcrChartInstance = new Chart(ctx, {
     type: "line",
@@ -2128,8 +2138,12 @@ const GH_FILE  = "pcr_data.json";
 const GH_API   = `https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`;
 
 function todayIST() {
-  return new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }))
-    .toISOString().slice(0, 10);
+  // Must return IST date (not UTC) — UTC date is wrong for India timezone
+  const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, "0");
+  const day = String(d.getDate()).padStart(2, "0");
+  return `${y}-${m}-${day}`;
 }
 
 async function ghReadPCR() {
@@ -2198,45 +2212,52 @@ async function ghLoadPCRHistory() {
     return;
   }
 
-  const today = todayIST();
+  const today  = todayIST();
   const stored = existing.data;
 
+  // Debug — log what we got vs today
+  console.log(`PCR load: stored.date=${stored.date}, today=${today}, points=${stored.points?.length}`);
+
   // Only load today's data
-  if (!stored.date || stored.date !== today || !stored.points.length) {
-    if (el) { el.textContent = "No data for today yet"; el.style.color = "#64748b"; }
+  if (!stored.date || stored.date !== today || !stored.points?.length) {
+    if (el) { el.textContent = `No data for today (${today}) yet`; el.style.color = "#64748b"; }
     return;
   }
 
-  // Rebuild history from stored points
+  // Rebuild history arrays
   pcrHistory.labels = [];
   pcrHistory.values = [];
   pcrHistory.smr    = [];
   pcrHistory.colors = [];
 
   for (const p of stored.points) {
+    if (!p.time || p.pcr == null) continue;
     pcrHistory.labels.push(p.time);
-    pcrHistory.values.push(p.pcr);
-    pcrHistory.smr.push(p.smr);
-    pcrHistory.colors.push(smrColor(p.smr));
+    pcrHistory.values.push(parseFloat(p.pcr));
+    const smrVal = p.smr != null ? parseFloat(p.smr) : pcrToSMR(parseFloat(p.pcr));
+    pcrHistory.smr.push(smrVal);
+    pcrHistory.colors.push(smrColor(smrVal));
   }
 
   const dp = document.getElementById("pcrDataPoints");
   if (dp) dp.textContent = pcrHistory.labels.length;
 
-  // Draw chart with restored data
+  // Always init chart fresh with loaded data
+  // If chart already exists destroy and recreate — ensures data is applied
   if (pcrChartInstance) {
-    pcrChartInstance.data.labels = [...pcrHistory.labels];
-    pcrChartInstance.data.datasets[0].data = [...pcrHistory.values];
-    pcrChartInstance.data.datasets[0].pointBackgroundColor = [...pcrHistory.colors];
-    pcrChartInstance.data.datasets[0].pointBorderColor = [...pcrHistory.colors];
-    pcrChartInstance.data.datasets[1].data = [...pcrHistory.smr];
+    pcrChartInstance.data.labels                              = [...pcrHistory.labels];
+    pcrChartInstance.data.datasets[0].data                   = [...pcrHistory.values];
+    pcrChartInstance.data.datasets[0].pointBackgroundColor   = [...pcrHistory.colors];
+    pcrChartInstance.data.datasets[0].pointBorderColor       = [...pcrHistory.colors];
+    pcrChartInstance.data.datasets[1].data                   = [...pcrHistory.smr];
     pcrChartInstance.update();
   } else {
+    // Chart not yet created — initPCRChart will pick up pcrHistory arrays
     initPCRChart();
   }
 
   if (el) {
-    el.textContent = `✓ Loaded ${stored.points.length} points from GitHub (${stored.date})`;
+    el.textContent = `✓ Loaded ${pcrHistory.labels.length} points (${stored.date})`;
     el.style.color = "#22c55e";
   }
 }
@@ -4365,14 +4386,18 @@ startCountdown();
 
 // Load KV snapshot first for instant data population
 loadKVSnapshot().then(() => {
-  // Then fetch live data
   trackedFetchNifty();
   trackedLoadIndices();
   trackedLoadGlobal();
   trackedLoadGiftPanel();
   trackedLoadCommodities();
   trackedLoadTicker();
+
+  // PCR: init chart → load GitHub history → then fetch live PCR
+  // Order matters: chart must exist before history is loaded into it
+  initPCRChart();
   ghLoadPCRHistory().then(() => trackedLoadPCR());
+
   trackedLoadAdvDecline();
   trackedLoad52Week();
   trackedLoadAnnouncements();

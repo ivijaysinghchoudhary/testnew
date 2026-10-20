@@ -10,6 +10,15 @@
   • NSE_HOLIDAYS in the script must be refreshed every January.
   • No secrets in this file. GitHub sync is optional and opt-in: the token
     lives only in this browser's localStorage (🔑 Sync button).
+  • Trend filter: CE only above VWAP or prior-day high; PE only below VWAP
+    or prior-day low. VWAP is Nifty price weighted by NIFTYBEES volume
+    (Yahoo publishes no intraday volume for ^NSEI).
+  • Volume confirmation now compares like with like: today's cumulative
+    volume vs the same clock time on the last 20 sessions (no more
+    partial-day vs full-day comparison).
+  • Setup-quality score (0–10) uses only independent inputs — trend 4,
+    DTE 2, R:R 2, event risk 2 — never a re-weighting of the signal score.
+    It is a setup grade, not a win probability.
   ─────────────────────────────────────────────────────────────────────
 -->
 <html lang="en">
@@ -1374,8 +1383,8 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
       <div class="sig-subtitle" id="sigSubtitle">Waiting for market data</div>
       <div id="sigConfBadge" class="sig-confidence conf-medium">● MEDIUM</div>
 
-      <!-- Probability Score -->
-      <div class="prob-score-wrap" id="probScoreWrap">
+      <!-- Setup Quality Score (independent factors, not a win probability) -->
+      <div class="prob-score-wrap" id="probScoreWrap" title="Setup quality = Trend 4 + DTE 2 + R:R 2 + Event risk 2. Independent of the signal score; not a win probability.">
         <div class="prob-dial">
           <svg viewBox="0 0 72 72">
             <circle cx="36" cy="36" r="28" fill="none" stroke="var(--border)" stroke-width="7"/>
@@ -1389,7 +1398,7 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
           </div>
         </div>
         <div class="prob-info">
-          <div class="prob-label" id="probLabel" style="color:#f59e0b">Calculating...</div>
+          <div class="prob-label" id="probLabel" style="color:#f59e0b">Grading setup...</div>
           <div class="prob-bar-track">
             <div class="prob-bar-fill" id="probBar" style="width:0%;background:#f59e0b"></div>
           </div>
@@ -1398,8 +1407,9 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
             <span style="background:rgba(239,68,68,0.1);color:#ef4444">1–3 Skip</span>
             <span style="background:rgba(245,158,11,0.1);color:#f59e0b">4–5 Watch</span>
             <span style="background:rgba(132,204,22,0.1);color:#84cc16">6–7 Consider</span>
-            <span style="background:rgba(34,197,94,0.1);color:#22c55e">8–10 High Prob</span>
+            <span style="background:rgba(34,197,94,0.1);color:#22c55e">8–10 A+ Setup</span>
           </div>
+          <div style="font-size:0.6rem;color:var(--muted);margin-top:4px">Trend 4 · DTE 2 · R:R 2 · Event 2 — independent of the signal score</div>
         </div>
       </div>
 
@@ -1450,13 +1460,18 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
         <div class="data-row"><span class="label">PCR <small style="color:var(--muted)">(NSE OI)</small></span><span class="val" id="si-pcr">—</span></div>
         <div class="data-row"><span class="label">A/D Ratio</span><span class="val" id="si-ad">—</span></div>
         <div class="data-row"><span class="label">Breadth</span><span class="val" id="si-breadth">—</span></div>
-        <div class="data-row"><span class="label">Nifty Volume</span><span class="val" id="si-vol">—</span></div>
-        <div class="data-row"><span class="label">Vol vs 20d Avg</span><span class="val" id="si-volavg">—</span></div>
+        <div class="data-row"><span class="label">Trend (VWAP)</span><span class="val" id="si-trend">—</span></div>
+        <div class="data-row"><span class="label">Prev Day H / L</span><span class="val" id="si-pdh">—</span></div>
+        <div class="data-row"><span class="label">Nifty Volume (ETF proxy)</span><span class="val" id="si-vol">—</span></div>
+        <div class="data-row"><span class="label">Vol vs same-time avg</span><span class="val" id="si-volavg">—</span></div>
         <div class="data-row"><span class="label">ATM Strike</span><span class="val" id="si-atm">—</span></div>
         <div class="data-row"><span class="label">Nearest S/R</span><span class="val" id="si-sr">—</span></div>
         <div class="data-row"><span class="label">S/R Distance</span><span class="val" id="si-srdist">—</span></div>
         <div class="data-row"><span class="label">Regime</span><span class="val" id="si-regime">—</span></div>
         <div class="data-row"><span class="label">Signal Time</span><span class="val" id="si-time">—</span></div>
+      </div>
+      <div style="font-size:0.62rem;color:var(--muted);margin-top:8px;line-height:1.5">
+        🚦 Trend filter: <strong>CE</strong> only above VWAP or prior-day high · <strong>PE</strong> only below VWAP or prior-day low.
       </div>
 
       <!-- Disclaimer -->
@@ -1502,7 +1517,7 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
           <th>Date</th>
           <th>Time</th>
           <th>Signal</th>
-          <th>Score</th>
+          <th>Setup</th>
           <th>Strike</th>
           <th>Entry ₹</th>
           <th>Volume</th>
@@ -3531,7 +3546,7 @@ function renderSRLevels(levels, spot, srCtx) {
 }
 
 // Core signal logic — v2 with corrected factors
-function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty, volScore, volLabel }) {
+function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty, volScore, volLabel, trend }) {
   const dayChgPct = ((spot - prevClose) / prevClose * 100);
   const atm = getATM(spot);
 
@@ -3591,7 +3606,9 @@ function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, brea
   else                         { reasons.push(`Momentum flat (${dayChgPct.toFixed(2)}%)`); }
 
   // ── FACTOR 5: VOLUME CONFIRMATION ────────────────────────────────────
-  // High volume confirms direction, low volume weakens conviction
+  // High same-time-of-day participation supports a directional move;
+  // low participation weakens conviction. This is a magnitude factor,
+  // not a direction vote.
   // volScore: +1 = high vol (confirms), 0 = normal, -1 = low vol (warns)
   if (volScore === 1)       { score += 1; reasons.push(`Volume high (${volLabel}) — confirms signal`); }
   else if (volScore === -1) { score -= 1; reasons.push(`Volume low (${volLabel}) — weak conviction`); warnings.push(`Low volume day — signal less reliable`); }
@@ -3637,6 +3654,30 @@ function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, brea
   // IVR > 80 or large gap = force SIDEWAYS regardless
   if (ivrFlag === "avoid" || gapFlag === "large") {
     direction = "SKIP"; type = null; confidence = "LOW"; confClass = "conf-low"; cardClass = "sideways"; emoji = "🚫";
+  }
+
+  // ── TREND FILTER (VWAP / prior-day high-low) ─────────────────────────
+  // CE is only valid above VWAP or above the prior-day high.
+  // PE is only valid below VWAP or below the prior-day low.
+  // If trend data is unavailable we fail open (no block) and say so.
+  if (!trend?.available) {
+    warnings.push("Trend data unavailable — VWAP/PDH filter not applied this cycle");
+  } else if (type === "CE" && !trend.ceOK) {
+    direction = "SKIP"; type = null; confidence = "LOW"; confClass = "conf-low"; cardClass = "sideways"; emoji = "🚫";
+    const msg = `🚫 Trend filter: CE needs price above VWAP (${Math.round(trend.vwap)}) or prior-day high (${Math.round(trend.pdh)})`;
+    warnings.push(msg); flags.push(msg);
+  } else if (type === "PE" && !trend.peOK) {
+    direction = "SKIP"; type = null; confidence = "LOW"; confClass = "conf-low"; cardClass = "sideways"; emoji = "🚫";
+    const msg = `🚫 Trend filter: PE needs price below VWAP (${Math.round(trend.vwap)}) or prior-day low (${Math.round(trend.pdl)})`;
+    warnings.push(msg); flags.push(msg);
+  } else if (type === "CE" && trend.ceOK) {
+    reasons.push(trend.abovePDH
+      ? "Trend filter passed — price above VWAP and prior-day high"
+      : "Trend filter passed — price above VWAP");
+  } else if (type === "PE" && trend.peOK) {
+    reasons.push(trend.belowPDL
+      ? "Trend filter passed — price below VWAP and prior-day low"
+      : "Trend filter passed — price below VWAP");
   }
 
   const highRisk = vix > 20 || ivrFlag === "bad" || ivrFlag === "avoid";
@@ -3742,7 +3783,7 @@ function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, brea
     sl = "🛑 Stay out — low conviction";
   }
 
-  return { direction, type, confidence, confClass, cardClass, emoji, strikeName, t1, t2, t3, sl, reasons, warnings, flags, score, highRisk, atm, expiry, primaryStrike, canConsiderOTM, strongConviction, ivrFlag, gapFlag, highVolRegime };
+  return { direction, type, confidence, confClass, cardClass, emoji, strikeName, t1, t2, t3, sl, reasons, warnings, flags, score, highRisk, atm, expiry, primaryStrike, canConsiderOTM, strongConviction, ivrFlag, gapFlag, highVolRegime, trend };
 }
 
 /* ─── PROBABILITY SCORE (0–10) ─── */
@@ -3793,71 +3834,123 @@ function calcOptionEntry(spot, strike, type, dte, vix) {
   return { fairValue: fairValue.toFixed(2), entryMid, entryLow, entryHigh, slPrice, t1Price, t2Price, t3Price, spread };
 }
 
-function computeProbabilityScore(sig, inputs) {
+/* ─── SETUP QUALITY SCORE — independent factors only ───
+   This deliberately does NOT reuse the directional score. The signal score
+   already weights IVR, VIX, breadth, PCR, gap and momentum; feeding those
+   back in would double-count them. This answers a different question:
+   "how good are the conditions for THIS trade right now?"
+     • Trend vs VWAP / prior-day H-L  … 0–4
+     • DTE / time-value window        … 0–2
+     • Reward:risk to next S/R        … 0–2
+     • Event risk                     … 0–2
+   It is a setup grade, not a win probability. */
+
+// Known major-event dates. Keep this current — add RBI MPC, Union Budget and
+// election-result dates each year; they drive the event-risk component.
+const EVENT_DATES = {
+  "2026-12-02": "RBI MPC (2–4 Dec)",
+  "2026-12-03": "RBI MPC (2–4 Dec)",
+  "2026-12-04": "RBI MPC (2–4 Dec)",
+  "2027-02-01": "Union Budget",
+};
+function getEventRisk() {
+  const key = todayIST();
+  if (EVENT_DATES[key]) {
+    return { level: 0, label: EVENT_DATES[key], note: "Major event — avoid fresh option buys" };
+  }
+  const e = getTargetExpiry();
+  if (e.isExpiryDay) {
+    return { level: 1, label: "Expiry day", note: "Expiry-day theta/gamma — small size only" };
+  }
+  return { level: 2, label: "No event", note: "" };
+}
+
+// R:R in index points: room to the next S/R vs the stop distance (premium risk ÷ delta).
+function computeTradeRR(sig, inputs) {
+  if (!sig.type || !sig.entryMid || !sig.slPrice) return 0;
+  const atm = getATM(inputs.spot);
+  const strikeDiff = Math.abs((sig.primaryStrike ?? atm) - atm);
+  const delta = strikeDiff >= 100 ? 0.28 : strikeDiff >= 50 ? 0.38 : 0.50;
+  const riskPts = Math.max(1, (sig.entryMid - sig.slPrice) / delta);
+  const sr = inputs.sr;
+  const fallback = inputs.spot * 0.005; // 0.5% move if no level nearby
+  const rewardPts = sig.type === "CE"
+    ? (sr?.above?.price ? sr.above.price - inputs.spot : fallback)
+    : (sr?.below?.price ? inputs.spot - sr.below.price : fallback);
+  return Math.max(0, rewardPts / riskPts);
+}
+
+function computeSetupQuality(sig, inputs, ctx = {}) {
   let raw = 0;
   const breakdown = [];
+  const trend = ctx.trend || inputs.trend;
+  const dte   = ctx.dte ?? sig.expiry?.daysToExpiry ?? 5;
 
-  // 1. Signal score strength (0–2 pts)
-  const absScore = Math.abs(sig.score);
-  const scorePts = Math.min(2, absScore / 4);
-  raw += scorePts;
-  breakdown.push({ label: `Signal (${sig.score > 0 ? "+" : ""}${sig.score})`, pts: scorePts, cls: scorePts >= 1.5 ? "pos" : scorePts >= 0.8 ? "neu" : "neg" });
+  // 1) TREND — 0–4 pts
+  let trendPts = 2, trendLabel = "Trend n/a (neutral)";
+  if (trend?.available) {
+    if (sig.type === "CE") {
+      if (trend.aboveVWAP && trend.abovePDH) { trendPts = 4; trendLabel = "Trend ↑ VWAP+PDH"; }
+      else if (trend.aboveVWAP)              { trendPts = 3; trendLabel = "Trend ↑ VWAP"; }
+      else if (trend.abovePDH)               { trendPts = 2; trendLabel = "Above PDH only"; }
+      else                                   { trendPts = 0; trendLabel = "Trend ✕ vs CE"; }
+    } else if (sig.type === "PE") {
+      if (trend.belowVWAP && trend.belowPDL) { trendPts = 4; trendLabel = "Trend ↓ VWAP+PDL"; }
+      else if (trend.belowVWAP)              { trendPts = 3; trendLabel = "Trend ↓ VWAP"; }
+      else if (trend.belowPDL)               { trendPts = 2; trendLabel = "Below PDL only"; }
+      else                                   { trendPts = 0; trendLabel = "Trend ✕ vs PE"; }
+    } else {
+      trendPts = 1; trendLabel = "No direction";
+    }
+  }
+  raw += trendPts;
+  breakdown.push({ label: trendLabel, pts: trendPts, cls: trendPts >= 3 ? "pos" : trendPts >= 2 ? "neu" : "neg" });
 
-  // 2. IV Rank — key for option buyers (0–2 pts)
-  // Low IVR = cheap options = better for buyers
-  const ivr = inputs.ivRank ?? 50;
-  let ivrPts;
-  if (ivr <= 20)      ivrPts = 2.0;
-  else if (ivr <= 40) ivrPts = 1.5;
-  else if (ivr <= 60) ivrPts = 0.5;
-  else if (ivr <= 80) ivrPts = 0;
-  else                ivrPts = 0;
-  raw += ivrPts;
-  breakdown.push({ label: `IVR ${ivr}%`, pts: ivrPts, cls: ivrPts >= 1.5 ? "pos" : ivrPts >= 0.5 ? "neu" : "neg" });
+  // 2) DTE — 0–2 pts
+  let dtePts, dteLabel;
+  if (dte >= 3 && dte <= 7) { dtePts = 2.0; dteLabel = `DTE ${dte} (sweet spot)`; }
+  else if (dte > 7)         { dtePts = 1.5; dteLabel = `DTE ${dte} (slow theta)`; }
+  else if (dte === 2)       { dtePts = 1.2; dteLabel = "DTE 2 (short)"; }
+  else if (dte === 1)       { dtePts = 0.5; dteLabel = "DTE 1 (very short)"; }
+  else                      { dtePts = 0;   dteLabel = "Expiry day (0 DTE)"; }
+  raw += dtePts;
+  breakdown.push({ label: dteLabel, pts: dtePts, cls: dtePts >= 1.5 ? "pos" : dtePts >= 1 ? "neu" : "neg" });
 
-  // 3. VIX regime (0–2 pts)
-  let vixPts;
-  if (inputs.vix < 14)       vixPts = 2.0;
-  else if (inputs.vix < 18)  vixPts = 1.5;
-  else if (inputs.vix < 22)  vixPts = 0.8;
-  else                       vixPts = 0;
-  raw += vixPts;
-  breakdown.push({ label: `VIX ${inputs.vix.toFixed(1)}`, pts: vixPts, cls: vixPts >= 1.5 ? "pos" : vixPts >= 0.5 ? "neu" : "neg" });
+  // 3) REWARD:RISK — 0–2 pts
+  const rr = ctx.rr ?? 0;
+  let rrPts, rrLabel;
+  if (rr >= 2)        { rrPts = 2.0; rrLabel = `R:R ${rr.toFixed(1)} (excellent)`; }
+  else if (rr >= 1.5) { rrPts = 1.5; rrLabel = `R:R ${rr.toFixed(1)} (good)`; }
+  else if (rr >= 1)   { rrPts = 1.0; rrLabel = `R:R ${rr.toFixed(1)} (ok)`; }
+  else if (rr >= 0.7) { rrPts = 0.5; rrLabel = `R:R ${rr.toFixed(1)} (thin)`; }
+  else                { rrPts = 0;   rrLabel = `R:R ${rr.toFixed(1)} (blocked)`; }
+  raw += rrPts;
+  breakdown.push({ label: rrLabel, pts: rrPts, cls: rrPts >= 1.5 ? "pos" : rrPts >= 0.5 ? "neu" : "neg" });
 
-  // 4. A/D breadth alignment (0–2 pts) — genuinely independent signal
-  const breadthAligned = (sig.type === "CE" && inputs.breadthPct >= 55) || (sig.type === "PE" && inputs.breadthPct <= 45);
-  const breadthPts = breadthAligned ? Math.min(2, Math.abs(inputs.breadthPct - 50) / 12.5) : 0;
-  raw += breadthPts;
-  breakdown.push({ label: `Breadth ${inputs.breadthPct}%`, pts: breadthPts, cls: breadthPts >= 1.5 ? "pos" : breadthPts >= 0.6 ? "neu" : "neg" });
-
-  // 5. Gap filter — replaces SMR (which was PCR duplicate)
-  // No/small gap = full points. Large gap = penalty
-  const absGap = Math.abs(inputs.gapPct || 0);
-  let gapPts;
-  if (absGap < 0.5)       gapPts = 2.0;
-  else if (absGap < 0.8)  gapPts = 1.5;
-  else if (absGap < 1.5)  gapPts = 0.5;
-  else                    gapPts = 0;
-  raw += gapPts;
-  breakdown.push({ label: `Gap ${(inputs.gapPct||0) >= 0 ? "+" : ""}${(inputs.gapPct||0).toFixed(2)}%`, pts: gapPts, cls: gapPts >= 1.5 ? "pos" : gapPts >= 0.5 ? "neu" : "neg" });
+  // 4) EVENT RISK — 0–2 pts
+  const ev = ctx.event || getEventRisk();
+  const evPts = ev.level === 2 ? 2 : ev.level === 1 ? 1 : 0;
+  raw += evPts;
+  breakdown.push({ label: `Event: ${ev.label}`, pts: evPts, cls: evPts >= 2 ? "pos" : evPts >= 1 ? "neu" : "neg" });
 
   let finalScore = Math.round(Math.min(10, raw));
-
-  // Penalties
-  if (sig.highRisk)                         finalScore = Math.max(0, finalScore - 2);
-  if (inputs.dte <= 1)                      finalScore = Math.max(0, finalScore - 1);
   if (sig.direction === "SIDEWAYS" || sig.direction === "SKIP") finalScore = Math.min(2, finalScore);
-  if (ivr > 80)                             finalScore = Math.max(0, finalScore - 3); // never trade IVR > 80
-  if (absGap >= 1.5)                        finalScore = Math.max(0, finalScore - 2); // large gap = low prob
+  // A missing trend reading must never grade as A+: the filter is running open.
+  if (!trend?.available) finalScore = Math.min(finalScore, 7);
+  // R:R and event risk act as gates, not just points — plenty of trend + time
+  // value should not produce an "A+" when there is no room to the next level.
+  if (rr < 1)        finalScore = Math.min(finalScore, 6);
+  else if (rr < 1.3) finalScore = Math.min(finalScore, 7);
+  if (ev.level === 0) finalScore = Math.min(finalScore, 5);
 
   let label, color;
-  if (finalScore >= 8)      { label = "Very High Probability — Strong Setup";    color = "#22c55e"; }
-  else if (finalScore >= 6) { label = "Good Setup — Worth Considering";           color = "#84cc16"; }
-  else if (finalScore >= 4) { label = "Moderate — Small Size Only";               color = "#f59e0b"; }
-  else if (finalScore >= 2) { label = "Weak — Skip or Paper Trade Only";          color = "#f97316"; }
-  else                      { label = "Very Low — Do Not Trade";                  color = "#ef4444"; }
+  if (finalScore >= 8)      { label = "A+ Setup — conditions aligned";        color = "#22c55e"; }
+  else if (finalScore >= 6) { label = "B Setup — tradable, normal size";      color = "#84cc16"; }
+  else if (finalScore >= 4) { label = "C Setup — small size or wait";         color = "#f59e0b"; }
+  else if (finalScore >= 2) { label = "D Setup — weak, paper only";           color = "#f97316"; }
+  else                      { label = "No Trade — conditions poor";           color = "#ef4444"; }
 
-  return { score: finalScore, label, color, breakdown };
+  return { score: finalScore, label, color, breakdown, rr, dte, event: ev, trendUsed: trend?.state || "n/a" };
 }
 
 function renderProbabilityScore(prob) {
@@ -3875,7 +3968,7 @@ function renderProbabilityScore(prob) {
 
   // Breakdown pills
   document.getElementById("probBreakdown").innerHTML = prob.breakdown.map(b =>
-    `<span class="prob-pill ${b.cls}">${b.label} +${b.pts.toFixed(1)}</span>`
+    `<span class="prob-pill ${b.cls}">${b.label} ${b.pts > 0 ? "+" + b.pts.toFixed(1) : "0"}</span>`
   ).join("");
 }
 
@@ -3884,10 +3977,8 @@ function renderSignal(sig, inputs, logEvent = true) {
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
   const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
 
-  // Probability score
-  const prob = computeProbabilityScore(sig, { ...inputs, dte: sig.expiry?.daysToExpiry ?? 5 });
-  renderProbabilityScore(prob);
-  sig.prob = prob;
+  // Probability score is computed after the entry/SL block below, because
+  // the R:R factor needs the actual premium and stop distance.
 
   // Entry price via Black-Scholes (shown first as fast estimate)
   if (sig.type && sig.primaryStrike) {
@@ -3906,6 +3997,8 @@ function renderSignal(sig, inputs, logEvent = true) {
     document.getElementById("sigT3").style.color = "#22c55e";
     document.getElementById("sigSL").textContent = `🛑 SL: Exit at ₹${ep.slPrice} · Entry ~₹${ep.entryMid} · Max loss ~₹${Math.round((ep.entryMid - ep.slPrice) * NIFTY_LOT_SIZE)} per lot`;
     sig.entryMid = ep.entryMid;
+    sig.slPrice  = ep.slPrice;
+    sig.t1Price  = ep.t1Price;
 
     // Then fetch real NSE price and override BS estimate
     updateEntryPriceFromNSE(sig, inputs);
@@ -3918,6 +4011,22 @@ function renderSignal(sig, inputs, logEvent = true) {
     document.getElementById("sigT2").textContent = sig.t2;
     document.getElementById("sigT3").textContent = sig.t3;
     document.getElementById("sigSL").textContent = sig.sl;
+  }
+
+  // ── Setup quality — independent of the directional score ──
+  sig.probCtx = {
+    trend: inputs.trend,
+    dte:   sig.expiry?.daysToExpiry ?? 5,
+    rr:    computeTradeRR(sig, inputs),
+    event: inputs.event || getEventRisk(),
+  };
+  const prob = computeSetupQuality(sig, inputs, sig.probCtx);
+  renderProbabilityScore(prob);
+  sig.prob = prob;
+
+  // Surface major-event risk in the warning list (score already penalises it)
+  if (inputs.event?.level <= 1 && inputs.event?.note) {
+    sig.warnings.push(`⚠ Event risk — ${inputs.event.label}: ${inputs.event.note}`);
   }
 
   // Card style
@@ -3974,6 +4083,17 @@ function renderSignal(sig, inputs, logEvent = true) {
   document.getElementById("si-ad").textContent      = inputs.adRatio;
   document.getElementById("si-breadth").textContent = inputs.breadthPct + "% bullish";
   document.getElementById("si-breadth").style.color = inputs.breadthPct >= 60 ? "#22c55e" : inputs.breadthPct <= 40 ? "#ef4444" : "#f59e0b";
+  const tr = inputs.trend;
+  const siTrend = document.getElementById("si-trend");
+  const siPdh   = document.getElementById("si-pdh");
+  if (tr?.available) {
+    siTrend.innerHTML = `<span style="color:${tr.aboveVWAP ? "#22c55e" : "#ef4444"}">${tr.aboveVWAP ? "▲ Above" : "▼ Below"} ${Math.round(tr.vwap)}</span>`;
+    siPdh.textContent = `${Math.round(tr.pdh)} / ${Math.round(tr.pdl)}`;
+    siPdh.style.color = tr.abovePDH ? "#22c55e" : tr.belowPDL ? "#ef4444" : "var(--text)";
+  } else {
+    siTrend.textContent = "n/a";
+    siPdh.textContent = "—";
+  }
   document.getElementById("si-atm").textContent     = sig.atm + " (ATM)";
   document.getElementById("si-time").textContent    = timeStr;
 
@@ -3989,69 +4109,183 @@ function renderSignal(sig, inputs, logEvent = true) {
 }
 
 /* ─── VOLUME CONFIRMATION ENGINE ─── */
-// Fetches Nifty's 20-day average volume and compares to today
-// Returns volScore (+1 confirms, 0 neutral, -1 contradicts), volRatio, volLabel
+// Compares today's cumulative volume with the same clock time on prior sessions.
+// Returns volScore (+1 high participation, 0 neutral, -1 low), volRatio, volLabel
 let cachedVolData = null;
 let cachedVolDate = null;
+let cachedVolAt = 0;
 
-async function computeVolumeConfirmation(direction) {
-  const today = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}))
-    .toISOString().slice(0,10);
+/* ─── INTRADAY CONTEXT — VWAP, prior-day H/L, same-time-of-day volume ───
+   Yahoo does not publish intraday volume for ^NSEI (all zeros), so we use
+   NIFTYBEES.NS — a liquid Nifty ETF — as a volume proxy, aligned bar-for-bar
+   with ^NSEI on the same 15-minute grid. Price levels (VWAP, PDH, PDL) always
+   come from ^NSEI itself; only the volume weights/ratios come from the ETF. */
+let _ictx = null, _ictxTs = 0, _ictxP = null;
 
-  // Use cached data if same day
-  if (cachedVolDate === today && cachedVolData) return cachedVolData;
+function _istStamp(tsSec) {
+  const d = new Date((tsSec + 19800) * 1000);   // IST has no DST
+  return { key: d.toISOString().slice(0, 10), min: d.getUTCHours() * 60 + d.getUTCMinutes() };
+}
+function _istMinsNow() {
+  const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  return d.getHours() * 60 + d.getMinutes();
+}
 
+function buildIntradayContext(priceData, volData, opts = {}) {
+  const res = priceData?.chart?.result?.[0];
+  if (!res?.timestamp?.length) return { available: false };
+  const q  = res.indicators?.quote?.[0] || {};
+  const ts = res.timestamp;
+
+  // ETF volume keyed by IST date|minute
+  const vmap = new Map();
+  const vres = volData?.chart?.result?.[0];
+  if (vres?.timestamp?.length) {
+    const vq = vres.indicators?.quote?.[0] || {};
+    vres.timestamp.forEach((t, i) => {
+      const v = vq.volume?.[i];
+      if (!(v > 0)) return;
+      const s = _istStamp(t);
+      vmap.set(`${s.key}|${s.min}`, v);
+    });
+  }
+
+  // Group Nifty bars into IST sessions (09:15–15:30)
+  const days = new Map();
+  ts.forEach((t, i) => {
+    const c = q.close?.[i];
+    if (c == null) return;
+    const s = _istStamp(t);
+    if (s.min < 555 || s.min > 930) return;
+    const h = q.high?.[i] ?? c, l = q.low?.[i] ?? c;
+    if (!days.has(s.key)) days.set(s.key, []);
+    days.get(s.key).push({ min: s.min, h, l, c, tp: (h + l + c) / 3, v: vmap.get(`${s.key}|${s.min}`) || 0 });
+  });
+  const keys = [...days.keys()].sort();
+  if (!keys.length) return { available: false };
+
+  const today  = opts.dateKey || todayIST();
+  const nowMin = opts.mins ?? _istMinsNow();
+  // Only completed 15-minute bars, same rule for today and every prior day
+  const completed = bars => bars.filter(b => b.min + 15 <= nowMin);
+
+  const todayBars = completed(days.get(today) || []);
+  const prevKeys  = keys.filter(k => k < today);
+  const prevBars  = prevKeys.length ? days.get(prevKeys[prevKeys.length - 1]) : [];
+
+  // VWAP on Nifty prices weighted by ETF volume; TWAP fallback
+  let pv = 0, vv = 0;
+  todayBars.forEach(b => { if (b.v > 0) { pv += b.tp * b.v; vv += b.v; } });
+  const vwap = vv > 0
+    ? pv / vv
+    : (todayBars.length ? todayBars.reduce((s, b) => s + b.tp, 0) / todayBars.length : null);
+  const vwapBasis = vv > 0 ? "VWAP (ETF vol)" : "TWAP";
+
+  // Same-time-of-day cumulative volume over up to 20 prior sessions
+  const cumVol = bars => completed(bars).reduce((s, b) => s + (b.v || 0), 0);
+  const priorCum = prevKeys.slice(-20).map(k => cumVol(days.get(k))).filter(v => v > 0);
+  const avgSame  = priorCum.length ? priorCum.reduce((a, b) => a + b, 0) / priorCum.length : 0;
+  const todayVol = cumVol(days.get(today) || []);
+
+  return {
+    available: !!vwap && prevBars.length > 0 && todayBars.length > 0,
+    vwap, vwapBasis,
+    pdh: prevBars.length ? Math.max(...prevBars.map(b => b.h)) : null,
+    pdl: prevBars.length ? Math.min(...prevBars.map(b => b.l)) : null,
+    pdc: prevBars.length ? prevBars[prevBars.length - 1].c : null,
+    todayVol,
+    avgSameTimeVol: avgSame,
+    volumeAvailable: todayBars.length >= 2 && priorCum.length >= 3 && avgSame > 0,
+    volProxy: vmap.size ? "NIFTYBEES" : null,
+    priorDays: priorCum.length,
+    asOf: nowMin,
+  };
+}
+
+async function getIntradayContext(maxAgeMs = 5 * 60000) {
+  if (_ictx && Date.now() - _ictxTs < maxAgeMs) return _ictx;
+  if (_ictxP) return _ictxP;
+  _ictxP = (async () => {
+    const [price, vol] = await Promise.all([
+      yahooChart("^NSEI", "1mo", "15m"),
+      yahooChart("NIFTYBEES.NS", "1mo", "15m").catch(() => null),
+    ]);
+    const ctx = buildIntradayContext(price, vol);
+    _ictx = ctx; _ictxTs = Date.now();
+    return ctx;
+  })().finally(() => { _ictxP = null; });
+  return _ictxP;
+}
+
+function trendState(spot, ctx) {
+  if (!ctx?.available || !(ctx.vwap > 0)) {
+    return { available: false, state: "n/a", ceOK: false, peOK: false,
+             vwap: null, pdh: null, pdl: null, pdc: null,
+             aboveVWAP: false, belowVWAP: false, abovePDH: false, belowPDL: false };
+  }
+  const aboveVWAP = spot > ctx.vwap, belowVWAP = spot < ctx.vwap;
+  const abovePDH  = ctx.pdh != null && spot > ctx.pdh;
+  const belowPDL  = ctx.pdl != null && spot < ctx.pdl;
+  const ceOK = aboveVWAP || abovePDH;
+  const peOK = belowVWAP || belowPDL;
+  let state = "chop";
+  if (aboveVWAP && abovePDH)       state = "strong-up";
+  else if (aboveVWAP)              state = "up";
+  else if (belowVWAP && belowPDL)  state = "strong-down";
+  else if (belowVWAP)              state = "down";
+  return { available: true, vwap: ctx.vwap, pdh: ctx.pdh, pdl: ctx.pdl, pdc: ctx.pdc,
+           aboveVWAP, belowVWAP, abovePDH, belowPDL, ceOK, peOK, state };
+}
+
+const fmtVol = v => v > 1e9 ? (v / 1e9).toFixed(2) + "B"
+                  : v > 1e6 ? (v / 1e6).toFixed(1) + "M"
+                  : v > 1e3 ? (v / 1e3).toFixed(1) + "K"
+                  : String(Math.round(v));
+
+// Volume score: high participation is treated as a conviction multiplier,
+// low participation as a warning. No direction argument — the old
+// direction-dependent "+1" could never fire and compared a partial session
+// against a full-day average. This compares like with like (same clock time).
+async function computeVolumeConfirmation(ictx = null) {
+  const today = todayIST();
+  // Time-sensitive: same-time-of-day volume changes every few minutes, so a
+  // per-day cache would freeze the 09:30 ratio and reuse it at 14:30.
+  if (cachedVolDate === today && cachedVolData && Date.now() - cachedVolAt < 5 * 60000) return cachedVolData;
+
+  const fail = { volScore: 0, volLabel: "N/A", volClass: "vol-na", volRatio: 1,
+                 todayVolFmt: "—", avg20Fmt: "—", volBasis: "n/a" };
   try {
-    // Fetch 1 month of Nifty daily data (volume history)
-    const d = await yahooChart("^NSEI", "1mo", "1d");
-    const q = d.chart.result[0].indicators.quote[0];
-    const volumes  = (q.volume || []).filter(v => v != null && v > 0);
-    const todayVol = volumes[volumes.length - 1] || 0;
+    const ctx = ictx || await getIntradayContext();
+    if (!ctx?.volumeAvailable || !(ctx.avgSameTimeVol > 0)) return fail;
 
-    if (!volumes.length) throw new Error("no volume data");
-
-    // 20-day average (exclude today)
-    const hist20  = volumes.slice(-21, -1); // last 20 days excluding today
-    const avg20   = hist20.length ? hist20.reduce((a,b)=>a+b,0) / hist20.length : 0;
-    const volRatio = avg20 > 0 ? (todayVol / avg20) : 1;
-
-    // Volume score relative to direction
-    // High volume in direction = confirms. High volume against = warns.
-    // Low volume = weak signal regardless of direction.
-    let volScore = 0, volLabel = "", volClass = "vol-normal";
-
-    if (volRatio >= 1.3) {
-      // High volume day — direction matters
-      volScore  = direction ? 1 : 0;  // +1 if direction given (confirms momentum)
-      volLabel  = `${(volRatio*100).toFixed(0)}% of avg — HIGH VOL ✓`;
-      volClass  = "vol-high";
-    } else if (volRatio >= 0.8) {
-      volScore  = 0;
-      volLabel  = `${(volRatio*100).toFixed(0)}% of avg — normal`;
-      volClass  = "vol-normal";
+    const ratio = ctx.todayVol / ctx.avgSameTimeVol;
+    let volScore, volLabel, volClass;
+    if (ratio >= 1.25) {
+      volScore = 1;  volClass = "vol-high";
+      volLabel = `${(ratio * 100).toFixed(0)}% of same-time avg — HIGH VOL ✓`;
+    } else if (ratio <= 0.75) {
+      volScore = -1; volClass = "vol-low";
+      volLabel = `${(ratio * 100).toFixed(0)}% of same-time avg — LOW VOL ⚠`;
     } else {
-      volScore  = -1;  // low volume = weak conviction regardless of direction
-      volLabel  = `${(volRatio*100).toFixed(0)}% of avg — LOW VOL ⚠`;
-      volClass  = "vol-low";
+      volScore = 0;  volClass = "vol-normal";
+      volLabel = `${(ratio * 100).toFixed(0)}% of same-time avg — normal`;
     }
 
     const result = {
-      todayVol, avg20: Math.round(avg20),
-      volRatio: parseFloat(volRatio.toFixed(2)),
+      todayVol: ctx.todayVol,
+      avg20: Math.round(ctx.avgSameTimeVol),
+      volRatio: parseFloat(ratio.toFixed(2)),
       volScore, volLabel, volClass,
-      todayVolFmt: todayVol > 1e9 ? (todayVol/1e9).toFixed(2)+"B"
-                 : todayVol > 1e6 ? (todayVol/1e6).toFixed(1)+"M" : todayVol.toString(),
-      avg20Fmt:  avg20 > 1e9 ? (avg20/1e9).toFixed(2)+"B"
-               : avg20 > 1e6 ? (avg20/1e6).toFixed(1)+"M" : Math.round(avg20).toString(),
+      todayVolFmt: fmtVol(ctx.todayVol),
+      avg20Fmt: fmtVol(ctx.avgSameTimeVol),
+      volBasis: ctx.volProxy ? `${ctx.volProxy} same-time (${ctx.priorDays}d)` : "same-time",
     };
-
     cachedVolData = result;
     cachedVolDate = today;
+    cachedVolAt = Date.now();
     return result;
-
   } catch {
-    return { volScore: 0, volLabel: "N/A", volClass: "vol-na", volRatio: 1,
-             todayVolFmt: "—", avg20Fmt: "—" };
+    return fail;
   }
 }
 
@@ -4206,8 +4440,8 @@ async function tlogAddEntry(sig, inputs, prob) {
   const date = now.toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"});
   const time = now.toLocaleTimeString("en-IN",{hour:"2-digit",minute:"2-digit",hour12:true});
 
-  // Get volume data
-  const vol = await computeVolumeConfirmation(sig.type);
+  // Get volume data (same-time-of-day, cached from the signal run)
+  const vol = await computeVolumeConfirmation();
 
   // Prefer the live NSE mid-price for the record; fall back to the BS estimate.
   let entryPrice = sig.entryMid || null;
@@ -4222,6 +4456,11 @@ async function tlogAddEntry(sig, inputs, prob) {
     date, time,
     direction:  sig.direction,
     score:      prob?.score ?? null,
+    scoreLabel: prob?.label ?? null,
+    signalScore: sig.score ?? null,
+    trend:      sig.trend?.state || null,
+    rr:         prob?.rr ?? null,
+    event:      prob?.event?.label || null,
     confidence: sig.confidence,
     strike:     sig.primaryStrike ? `${sig.primaryStrike} ${sig.type}` : `${sig.atm} ${sig.type || ""}`,
     entryPrice,
@@ -4319,8 +4558,9 @@ function addSignalLog(time, sig, inputs) {
 
 function fireNotification(sig, time, prob) {
   if (!("Notification" in window) || Notification.permission !== "granted") return;
-  const title = `${sig.emoji} ${sig.direction} — Score ${prob?.score ?? "?"}/10`;
-  const body  = `${prob?.label ?? sig.confidence} · Strike: ${sig.primaryStrike ?? sig.atm} ${sig.type ?? ""} · ${time}\n${sig.strikeName.split("\n")[0]}`;
+  const title = `${sig.emoji} ${sig.direction} — Setup ${prob?.score ?? "?"}/10`;
+  const trend = sig.trend?.available ? ` · Trend ${sig.trend.state}` : "";
+  const body  = `${prob?.label ?? sig.confidence}${trend} · Strike: ${sig.primaryStrike ?? sig.atm} ${sig.type ?? ""} · ${time}\n${sig.strikeName.split("\n")[0]}`;
   new Notification(title, { body, icon: "https://cdn-icons-png.flaticon.com/512/2534/2534461.png" });
 }
 
@@ -4431,14 +4671,17 @@ async function runSignalEngine(force = false, logEvent = false) {
     const dayChg    = spot - prevClose;
     const dayChgPct = prevClose > 0 ? (dayChg / prevClose * 100) : 0;
 
-    // Compute volume confirmation
-    const volData = await computeVolumeConfirmation(null); // direction unknown yet
+    // Compute intraday context (VWAP / PDH-PDL / same-time volume)
+    const ictx = await getIntradayContext().catch(() => null);
+    const volData = await computeVolumeConfirmation(ictx);
     // Update UI volume rows
     const siVol    = document.getElementById("si-vol");
     const siVolAvg = document.getElementById("si-volavg");
     if (siVol)    siVol.textContent = volData.todayVolFmt;
     if (siVolAvg) {
-      siVolAvg.innerHTML = `${(volData.volRatio*100).toFixed(0)}% of 20d avg <span class="vol-badge ${volData.volClass}">${volData.volLabel?.split("—")[1]?.trim() || ""}</span>`;
+      siVolAvg.innerHTML = volData.volLabel === "N/A"
+        ? "—"
+        : `${(volData.volRatio*100).toFixed(0)}% of same-time avg <span class="vol-badge ${volData.volClass}">${volData.volLabel?.split("—")[1]?.trim() || ""}</span>`;
     }
 
     // Compute S/R levels and regime
@@ -4449,7 +4692,11 @@ async function runSignalEngine(force = false, logEvent = false) {
     const regime    = classifyRegime(vix, ivRank, vixPercentile, dayChgPct, breadthPct);
     renderRegime(regime);
 
-    const inputs = { spot, prevClose, dayChg, dayChgPct, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty: srCtx.srScorePenalty, volScore: volData.volScore, volLabel: volData.volLabel };
+    // Trend filter + event risk (used by computeSignal and setup quality)
+    const trend     = trendState(spot, ictx);
+    const eventRisk = getEventRisk();
+
+    const inputs = { spot, prevClose, dayChg, dayChgPct, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty: srCtx.srScorePenalty, volScore: volData.volScore, volLabel: volData.volLabel, trend, sr: srCtx, event: eventRisk };
     const sig = computeSignal(inputs);
     renderSignal(sig, inputs, logEvent);
 
@@ -4765,7 +5012,17 @@ async function updateEntryPriceFromNSE(sig, inputs) {
 
     // Store real entry price on sig for trading log
     sig.entryMid   = ep.midPrice;
+    sig.slPrice    = ep.slPrice;
+    sig.t1Price    = ep.t1Price;
     sig.entryLive  = true;
+
+    // Re-grade the setup now that R:R uses the live premium
+    if (sig.probCtx) {
+      sig.probCtx.rr = computeTradeRR(sig, inputs);
+      const p = computeSetupQuality(sig, inputs, sig.probCtx);
+      renderProbabilityScore(p);
+      sig.prob = p;
+    }
 
   } catch(e) {
     console.log("Real option price fetch failed:", e.message);
@@ -4787,7 +5044,7 @@ function setupDailyReset() {
       // Reset S/R cache
       cachedSRLevels = null; cachedSRSpot = 0;
       // Reset vol cache
-      cachedVolData = null; cachedVolDate = null;
+      cachedVolData = null; cachedVolDate = null; cachedVolAt = 0;
       // Reset 52w high cache
       nifty52wHigh = null;
       console.log("✓ Daily reset complete");

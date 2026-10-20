@@ -1,4 +1,17 @@
 <!DOCTYPE html>
+<!--
+  NSE Market Dashboard — updated build (20-Oct-2026)
+  ─────────────────────────────────────────────────────────────────────
+  • Expiry logic: NIFTY weekly = Tuesday, monthly = last Tuesday,
+    if the Tuesday is an NSE holiday expiry moves to the PREVIOUS trading day.
+  • NIFTY lot size = 65 (NSE/FAOP/70616, effective after 30-Dec-2025).
+  • F&O session close 15:40 until 04-Dec-2026, 15:45 from 07-Dec-2026;
+    expiring index contracts stop at 15:30.
+  • NSE_HOLIDAYS in the script must be refreshed every January.
+  • No secrets in this file. GitHub sync is optional and opt-in: the token
+    lives only in this browser's localStorage (🔑 Sync button).
+  ─────────────────────────────────────────────────────────────────────
+-->
 <html lang="en">
 <head>
 <meta charset="UTF-8">
@@ -1171,14 +1184,14 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
       <div style="position:relative;height:160px;width:100%;max-height:160px;overflow:hidden">
         <canvas id="pcrChart" style="max-height:160px"></canvas>
       </div>
-      <div style="display:flex;justify-content:space-between;margin-top:6px;font-size:0.65rem;color:var(--muted)">
-        <span>09:15</span><span>11:00</span><span>12:30</span><span>14:00</span><span>15:30</span>
-      </div>
     </div>
 
     <div id="pcrDetails" style="margin-top:10px"></div>
-    <div id="pcrStorageStatus" style="margin-top:8px;font-size:0.68rem;color:var(--muted);padding:5px 8px;background:var(--surface2);border-radius:6px">⟳ Connecting to GitHub storage...</div>
+    <div id="pcrStorageStatus" style="margin-top:8px;font-size:0.68rem;color:var(--muted);padding:5px 8px;background:var(--surface2);border-radius:6px">⟳ Connecting to storage...</div>
+    <button onclick="configureGHToken()" style="margin-top:6px;background:var(--surface2);border:1px solid var(--border2);color:var(--muted2);padding:3px 8px;border-radius:6px;font-size:0.65rem;cursor:pointer;font-family:'Inter',sans-serif">🔑 GitHub sync (optional)</button>
   </div>
+
+</div>
 
 
 <!-- ── ROW 2 ── -->
@@ -1330,7 +1343,7 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
       <div style="font-size:0.68rem;color:var(--muted);margin-top:3px">Based on IVR · VIX Regime · A/D Breadth · Gap · Momentum · S/R Context</div>
     </div>
     <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-      <div class="signal-expiry" id="sigExpiryLabel">Weekly Expiry: —</div>
+      <div class="signal-expiry" id="sigExpiryLabel" title="NSE NIFTY weekly expiry: Tuesday. If Tuesday is a holiday, expiry moves to the previous trading day. Monthly contracts expire on the last Tuesday. NIFTY lot size: 65.">Expiry: —</div>
       <button class="notify-btn" id="notifyToggleBtn" onclick="toggleNotifications()">🔔 Enable Alerts</button>
     </div>
   </div>
@@ -1434,7 +1447,7 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
         <div class="data-row"><span class="label">India VIX</span><span class="val" id="si-vix">—</span></div>
         <div class="data-row"><span class="label">VIX Percentile</span><span class="val" id="si-vixpct">—</span></div>
         <div class="data-row"><span class="label">IV Rank (IVR)</span><span class="val" id="si-smr">—</span></div>
-        <div class="data-row"><span class="label">PCR <small style="color:var(--muted)">(proxy)</small></span><span class="val" id="si-pcr">—</span></div>
+        <div class="data-row"><span class="label">PCR <small style="color:var(--muted)">(NSE OI)</small></span><span class="val" id="si-pcr">—</span></div>
         <div class="data-row"><span class="label">A/D Ratio</span><span class="val" id="si-ad">—</span></div>
         <div class="data-row"><span class="label">Breadth</span><span class="val" id="si-breadth">—</span></div>
         <div class="data-row"><span class="label">Nifty Volume</span><span class="val" id="si-vol">—</span></div>
@@ -1461,7 +1474,7 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
   <!-- Next signal countdown -->
   <div class="signal-next">
     <span>Next signal check: <strong id="sigNextTime">—</strong></span>
-    <span style="color:var(--muted)">Signals fire at: 9:30 · 10:15 · 11:00 · 12:00 · 13:00 · 14:00 · 15:00 IST</span>
+    <span style="color:var(--muted)">Signals fire at: 10:30 · 11:15 · 12:00 · 12:30 · 13:30 · 14:30 IST</span>
   </div>
 
 </div>
@@ -1477,6 +1490,7 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <div id="tlogStorageStatus" style="font-size:0.68rem;color:var(--muted)">Loading...</div>
+      <button onclick="configureGHToken()" style="background:var(--surface2);border:1px solid var(--border2);color:var(--muted2);padding:4px 10px;border-radius:6px;font-size:0.7rem;cursor:pointer;font-family:'Inter',sans-serif">🔑 Sync</button>
       <button onclick="tlogExportCSV()" style="background:var(--surface2);border:1px solid var(--border2);color:var(--muted2);padding:4px 10px;border-radius:6px;font-size:0.7rem;cursor:pointer;font-family:'Inter',sans-serif">↓ Export CSV</button>
     </div>
   </div>
@@ -1532,7 +1546,7 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
 <!-- ── LIVE CHART ── -->
 <div class="section-label">Nifty 50 Live Chart</div>
 <div class="panel">
-  <h3>Nifty 50 — Intraday Chart</h3>
+  <h3>Nifty 50 — Price Chart</h3>
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
     <span style="font-size:0.72rem;color:var(--muted);margin-right:4px">Open in:</span>
     <a href="https://www.nseindia.com/market-data/live-equity-market" target="_blank" class="chart-ext-btn">NSE India</a>
@@ -1542,33 +1556,20 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
     <a href="https://in.tradingview.com/chart/?symbol=NSE%3ANIFTY" target="_blank" class="chart-ext-btn" style="background:var(--accent);color:#fff;border-color:var(--accent)">TradingView ↗</a>
   </div>
 
-  <!-- NSE Nifty chart via Dhan HQ public embed -->
   <div id="chartTabBar" style="display:flex;gap:4px;margin-bottom:0;border-bottom:1px solid var(--border);padding-bottom:0">
-    <button class="tab-btn active" onclick="showChartTab('dhan',this)">Dhan Chart</button>
-    <button class="tab-btn" onclick="showChartTab('google',this)">Google Finance</button>
+    <button class="tab-btn active" onclick="showChartRange('1d',this)">1 Day</button>
+    <button class="tab-btn" onclick="showChartRange('1mo',this)">1 Month</button>
+    <button class="tab-btn" onclick="showChartRange('1y',this)">1 Year</button>
+    <span id="chartLoadNote" style="margin-left:auto;align-self:center;font-size:0.66rem;color:var(--muted)">Loading…</span>
   </div>
 
-  <div id="chartTab-dhan" style="margin-top:0">
-    <iframe
-      src="https://web.dhan.co/charts/index.html?v=3&type=NSE_EQ&symbol=NIFTY&theme=dark"
-      style="width:100%;height:480px;border:none;border-radius:0 0 8px 8px;display:block;background:var(--surface2)"
-      loading="lazy"
-      title="Nifty 50 Chart">
-    </iframe>
-  </div>
-
-  <div id="chartTab-google" style="display:none;margin-top:0">
-    <iframe
-      src="https://www.google.com/finance/chart?q=INDEXNSE:NIFTY_50&tlf=1d&cht=c&chst=vkc"
-      style="width:100%;height:480px;border:none;border-radius:0 0 8px 8px;display:block;background:var(--surface2)"
-      loading="lazy"
-      title="Nifty 50 Google Finance Chart">
-    </iframe>
+  <div style="position:relative;height:420px;margin-top:10px">
+    <canvas id="niftyChart"></canvas>
   </div>
 
   <div style="font-size:0.68rem;color:var(--muted);margin-top:8px;display:flex;justify-content:space-between;flex-wrap:wrap;gap:4px">
-    <span>If chart doesn't load, use the external links above ↑</span>
-    <span>Chart reloads every 5 min automatically</span>
+    <span>Data: Yahoo Finance · chart rendered locally (no blocked iframes)</span>
+    <span>Reloads every 5 min during market hours</span>
   </div>
 </div>
 
@@ -1596,10 +1597,209 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
 // Format: https://YOUR-WORKER-NAME.YOUR-SUBDOMAIN.workers.dev
 const WORKER_URL = "https://choudhary-dashboard.ivijaysinghchoudhary.workers.dev";
 
-// Fallback proxy (used only if Worker is unavailable)
-const proxy = "https://api.allorigins.win/raw?url=";
+// ── NSE F&O RULES (verified 20-Oct-2026) ─────────────────────────────
+// Weekly NIFTY expiry: Tuesday. Monthly: last Tuesday.
+// If the expiry Tuesday is an NSE holiday, expiry moves to the PREVIOUS trading day.
+// NIFTY lot size: 65. F&O close: 15:40 until 04-Dec-2026, 15:45 from 07-Dec-2026.
+// ⚠ NSE_HOLIDAYS below must be refreshed every January from the NSE holiday list.
+const NIFTY_LOT_SIZE = 65;
+const NSE_FO_CLOSE_1540_UNTIL = "2026-12-04";
+const NSE_HOLIDAYS = new Set([
+  "2026-01-15","2026-01-26","2026-03-03","2026-03-26","2026-03-31",
+  "2026-04-03","2026-04-14","2026-05-01","2026-05-28","2026-06-26",
+  "2026-09-14","2026-10-02","2026-10-20","2026-11-10","2026-11-24",
+  "2026-12-25"
+]);
 
-// Worker fetch helper — retries once, then falls back to Yahoo via proxy
+const NSE_BASE  = "https://www.nseindia.com";
+const JINA_BASE = "https://r.jina.ai/";
+
+function dateKey(dt) {
+  return `${dt.getFullYear()}-${String(dt.getMonth()+1).padStart(2,"0")}-${String(dt.getDate()).padStart(2,"0")}`;
+}
+function makeLocalDate(y, mo, d) { return new Date(y, mo, d, 12, 0, 0, 0); }
+function addDays(dt, n) { const d = new Date(dt); d.setDate(d.getDate() + n); return d; }
+function isTradingDayDate(dt) {
+  const wd = dt.getDay();
+  return wd !== 0 && wd !== 6 && !NSE_HOLIDAYS.has(dateKey(dt));
+}
+function prevTradingDay(dt) {
+  const d = new Date(dt);
+  while (!isTradingDayDate(d)) d.setDate(d.getDate() - 1);
+  return d;
+}
+function nextTuesdayOnOrAfter(dt) {
+  const d = new Date(dt);
+  while (d.getDay() !== 2) d.setDate(d.getDate() + 1);
+  return d;
+}
+function lastTuesdayOfMonth(dt) {
+  const d = makeLocalDate(dt.getFullYear(), dt.getMonth() + 1, 0);
+  while (d.getDay() !== 2) d.setDate(d.getDate() - 1);
+  return d;
+}
+// The Tuesday expiry for the week containing `dt`, holiday-adjusted backwards.
+function expiryDateForWeek(dt) {
+  return prevTradingDay(nextTuesdayOnOrAfter(dt));
+}
+function tradingDaysBetween(today, target) {
+  if (dateKey(today) === dateKey(target)) return 0;
+  let n = 0, d = addDays(today, 1);
+  while (dateKey(d) <= dateKey(target)) {
+    if (isTradingDayDate(d)) n++;
+    d = addDays(d, 1);
+  }
+  return n;
+}
+function nseDateStr(dt) {
+  const m = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][dt.getMonth()];
+  return `${String(dt.getDate()).padStart(2,"0")}-${m}-${dt.getFullYear()}`;
+}
+function displayDateStr(dt) {
+  return dt.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+// Returns the current IST date as a local-noon Date plus minutes since midnight.
+function istNow() {
+  const d = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
+  return {
+    date: makeLocalDate(d.getFullYear(), d.getMonth(), d.getDate()),
+    mins: d.getHours() * 60 + d.getMinutes(),
+    weekday: d.getDay()
+  };
+}
+
+// Target expiry used by the signal engine.
+// On an expiry day (or after it, e.g. a holiday-shifted expiry) it suggests NEXT expiry.
+function getTargetExpiry() {
+  const now        = istNow();
+  const today      = now.date;
+  const scheduled  = nextTuesdayOnOrAfter(today);   // this week's scheduled Tuesday
+  const current    = prevTradingDay(scheduled);     // holiday-adjusted expiry
+  const todayIsExp  = dateKey(current) === dateKey(today);
+  const currentGone = dateKey(current) <= dateKey(today);
+
+  // Move to the NEXT scheduled Tuesday (+7d), then holiday-adjust backwards
+  const target = currentGone ? prevTradingDay(addDays(scheduled, 7)) : current;
+  const monthlyAdjusted = prevTradingDay(lastTuesdayOfMonth(target));
+  const isMonthly = dateKey(monthlyAdjusted) === dateKey(target);
+
+  return {
+    dateStr: displayDateStr(target),
+    apiDate: nseDateStr(target),           // DD-Mon-YYYY for NSE option-chain
+    daysToExpiry: tradingDaysBetween(today, target),
+    isExpiryDay: todayIsExp,
+    isMonthly,
+    currentExpiryStr: displayDateStr(current),
+    targetDate: target
+  };
+}
+
+// Market session info: cash 09:15–15:30, F&O 09:15–15:40/15:45, pre-open from 09:00.
+function getMarketSession() {
+  const now = istNow();
+  const key = dateKey(now.date);
+  const isHoliday = !isTradingDayDate(now.date);
+  const foClose = key <= NSE_FO_CLOSE_1540_UNTIL ? 940 : 945;
+  const expiryToday = dateKey(expiryDateForWeek(now.date)) === key;
+  let status, cls;
+  if (isHoliday)              { status = "● MARKET CLOSED"; cls = "status-closed"; }
+  else if (now.mins < 540)    { status = "● MARKET CLOSED"; cls = "status-closed"; }
+  else if (now.mins < 555)    { status = "● PRE-OPEN";      cls = "status-pre"; }
+  else if (now.mins <= 930)   { status = "● MARKET OPEN";   cls = "status-open"; }
+  else if (now.mins <= foClose){ status = "● F&O ONLY";     cls = "status-pre"; }
+  else                        { status = "● MARKET CLOSED"; cls = "status-closed"; }
+  return { ...now, status, cls, isHoliday, foClose, expiryToday, isTradingDay: !isHoliday };
+}
+
+// Decode r.jina.ai wrapper: "Title: ...\n\nURL Source: ...\n\nMarkdown Content:\n<json>"
+function parseJinaText(txt) {
+  let t = String(txt || "");
+  const marker = t.indexOf("Markdown Content:");
+  if (marker >= 0) t = t.slice(marker + "Markdown Content:".length);
+  t = t.trim();
+  if (t.startsWith("```")) t = t.replace(/^```(?:json)?/i, "").replace(/```$/,"").trim();
+  return t;
+}
+async function jinaJSON(url, timeoutMs = 16000) {
+  const r = await fetch(JINA_BASE + url, {
+    signal: AbortSignal.timeout(timeoutMs),
+    headers: { "Accept": "text/plain" }
+  });
+  if (!r.ok) throw new Error("Jina HTTP " + r.status);
+  const txt = parseJinaText(await r.text());
+  if (!txt || (txt[0] !== "{" && txt[0] !== "[")) {
+    throw new Error("Jina returned non-JSON: " + txt.slice(0, 80));
+  }
+  return JSON.parse(txt);
+}
+async function nseAPI(path, timeoutMs = 16000) {
+  return jinaJSON(NSE_BASE + path, timeoutMs);
+}
+const _chartCache = new Map();
+async function yahooChart(symbol, range = "1d", interval = "5m", timeoutMs = 16000) {
+  const key = `${symbol}|${range}|${interval}`;
+  const hit = _chartCache.get(key);
+  if (hit?.data && Date.now() - hit.ts < 60000) return hit.data;
+  if (hit?.promise) return hit.promise;
+
+  const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?range=${range}&interval=${interval}`;
+  const promise = jinaJSON(url, timeoutMs)
+    .then(data => { _chartCache.set(key, { ts: Date.now(), data }); return data; })
+    .catch(err => { _chartCache.delete(key); throw err; });
+  _chartCache.set(key, { promise });
+  return promise;
+}
+async function workerJSON(path, timeoutMs = 7000) {
+  const r = await fetch(WORKER_URL + path, { signal: AbortSignal.timeout(timeoutMs) });
+  if (!r.ok) throw new Error("Worker HTTP " + r.status);
+  return await r.json();
+}
+async function yahooQuote(symbol) {
+  try {
+    const d = await workerJSON(`/yahoo?s=${encodeURIComponent(symbol)}`);
+    if (d && d.price) return { price: +d.price, prevClose: +(d.prevClose || d.price), name: d.name || symbol };
+  } catch {}
+  try {
+    const j = await yahooChart(symbol, "1d", "1d", 12000);
+    const m = j.chart.result[0].meta;
+    return { price: m.regularMarketPrice, prevClose: m.chartPreviousClose ?? m.previousClose, name: m.shortName || symbol };
+  } catch {}
+  return null;
+}
+
+// Shared caches (avoid hammering NSE/Jina on boot)
+let _allIndices = null, _allIndicesTs = 0, _allIndicesP = null;
+async function getAllIndices(maxAgeMs = 60000) {
+  if (_allIndices && Date.now() - _allIndicesTs < maxAgeMs) return _allIndices;
+  if (_allIndicesP) return _allIndicesP;
+  _allIndicesP = nseAPI("/api/allIndices")
+    .then(j => {
+      if (!j?.data?.length) throw new Error("empty allIndices");
+      _allIndices = j.data; _allIndicesTs = Date.now();
+      return _allIndices;
+    })
+    .finally(() => { _allIndicesP = null; });
+  return _allIndicesP;
+}
+let _n50Stocks = null, _n50StocksTs = 0, _n50StocksP = null;
+async function getNifty50Stocks(maxAgeMs = 60000) {
+  if (_n50Stocks && Date.now() - _n50StocksTs < maxAgeMs) return _n50Stocks;
+  if (_n50StocksP) return _n50StocksP;
+  _n50StocksP = nseAPI("/api/equity-stock-indices?index=NIFTY%2050")
+    .then(j => {
+      const rows = (j?.data || []).filter(r => r.priority !== 1);
+      if (!rows.length) throw new Error("empty NIFTY 50 stocks");
+      _n50Stocks = rows; _n50StocksTs = Date.now();
+      return _n50Stocks;
+    })
+    .finally(() => { _n50StocksP = null; });
+  return _n50StocksP;
+}
+function findIndex(rows, name) {
+  return (rows || []).find(r => r.index === name || r.indexSymbol === name || r.symbol === name);
+}
+
+// Worker fetch helper — retries once, then falls back
 async function wFetch(path, fallbackFn) {
   const tryWorker = async (timeoutMs) => {
     const r = await fetch(WORKER_URL + path, { signal: AbortSignal.timeout(timeoutMs) });
@@ -1655,9 +1855,9 @@ async function checkWorkerHealth(manual = false) {
     workerOnline = false;
     dot.style.background  = "#ef4444";
     dot.style.boxShadow   = "0 0 4px #ef4444";
-    text.textContent      = "Worker: ✗ using fallback proxy";
+    text.textContent      = "Worker: ✗ Jina/NSE fallback in use";
     text.style.color      = "#ef4444";
-    text.title            = "Worker unreachable — data coming from Yahoo via allorigins.win proxy\nClick to retry";
+    text.title            = "Worker unreachable — NSE data is fetched via r.jina.ai and Yahoo\nClick to retry";
 
     // Show a one-time toast if this is auto-detected (not manual click)
     if (!manual && workerOnline !== false) {
@@ -1666,7 +1866,7 @@ async function checkWorkerHealth(manual = false) {
         border:1px solid #ef444466;border-radius:10px;padding:12px 16px;font-size:0.75rem;
         z-index:9999;max-width:320px;box-shadow:0 4px 20px rgba(0,0,0,0.4);line-height:1.6`;
       toast.innerHTML = `<div style="font-weight:700;color:#ef4444;margin-bottom:4px">⚠ Cloudflare Worker Offline</div>
-        <div style="color:var(--muted2)">Falling back to Yahoo Finance via allorigins proxy.</div>
+        <div style="color:var(--muted2)">Falling back to NSE via r.jina.ai and Yahoo Finance.</div>
         <div style="color:var(--muted);font-size:0.68rem;margin-top:4px">
           Dashboard still works but will be slower.<br>
           Check Worker at: <a href="${WORKER_URL}/health" target="_blank" style="color:var(--accent)">${WORKER_URL}/health</a>
@@ -1682,56 +1882,70 @@ setTimeout(() => checkWorkerHealth(), 2000);
 setInterval(() => checkWorkerHealth(), 120000);
 
 
-/* ─── CLOCK ─── */
+/* ─── CLOCK / MARKET STATUS ─── */
 function updateClock() {
-  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-  const day = now.getDay(), m = now.getHours() * 60 + now.getMinutes();
-  let statusText = "", statusClass = "";
-  if (day === 0 || day === 6) { statusText = "● MARKET CLOSED"; statusClass = "status-closed"; }
-  else if (m >= 540 && m < 555) { statusText = "● PRE-OPEN"; statusClass = "status-pre"; }
-  else if (m >= 555 && m <= 930) { statusText = "● MARKET OPEN"; statusClass = "status-open"; }
-  else { statusText = "● MARKET CLOSED"; statusClass = "status-closed"; }
-  const date = now.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
-  const time = now.toLocaleTimeString("en-IN");
-  document.getElementById("marketInfo").innerHTML = date + "<br>" + time + " IST";
-  const s = document.getElementById("marketStatus");
-  s.textContent = statusText;
-  s.className = "market-status " + statusClass;
+  const s = getMarketSession();
+  const date = s.date.toLocaleDateString("en-IN", { weekday: "long", day: "numeric", month: "long", year: "numeric" });
+  const time = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }))
+    .toLocaleTimeString("en-IN");
+  const foCloseTxt = s.foClose === 940 ? "15:40" : "15:45";
+  const sessionLine = s.isHoliday
+    ? `<span style="color:var(--red)">NSE holiday — no trading</span>`
+    : `Cash 09:15–15:30 · F&O 09:15–${foCloseTxt}${s.expiryToday ? " · expiring index F&O stops 15:30" : ""}`;
+  document.getElementById("marketInfo").innerHTML =
+    date + "<br>" + time + " IST<br>" +
+    `<span style="font-size:0.63rem;color:var(--muted)">${sessionLine}</span>`;
+
+  const el = document.getElementById("marketStatus");
+  el.textContent = s.status;
+  el.className = "market-status " + s.cls;
+  el.title = s.isHoliday
+    ? "NSE holiday today. Expiries shift to the previous trading day."
+    : `F&O closes ${foCloseTxt} IST${s.expiryToday ? "; expiring index contracts stop at 15:30" : ""}`;
 }
 
 /* ─── NIFTY MAIN ─── */
 async function fetchNifty() {
   try {
-    const d = await wFetch("/nse/indices", async () => {
-      const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI"));
-      const j = await r.json();
-      const m = j.chart.result[0].meta;
-      return { indices: [{ name:"NIFTY 50", last: m.regularMarketPrice, prevClose: m.previousClose }] };
-    });
-    const nifty = d.indices?.find(i => i.name === "NIFTY 50");
-    if (!nifty) return;
+    let price, prevClose, row = null;
+    try {
+      const rows = await getAllIndices();
+      row = findIndex(rows, "NIFTY 50");
+      if (!row) throw new Error("NIFTY 50 missing");
+      price = parseFloat(row.last);
+      prevClose = parseFloat(row.previousClose);
+      if (row.yearHigh) nifty52wHigh = parseFloat(row.yearHigh);
+    } catch {
+      const q = await yahooQuote("^NSEI");
+      if (!q) throw new Error("no Nifty quote");
+      price = q.price; prevClose = q.prevClose;
+    }
+    if (!(price > 0)) return;
 
-    // Always recompute change from last - prevClose (don't trust NSE's change field — sign can mismatch)
-    const price    = parseFloat(nifty.last);
-    const prevClose= parseFloat(nifty.prevClose || nifty.previousClose || price);
-    const change   = price - prevClose;
-    const pct      = prevClose > 0 ? (change / prevClose * 100) : 0;
-
-    const color = change >= 0 ? "#22c55e" : "#ef4444";
+    // Always recompute change from last - prevClose (NSE's sign can be inconsistent)
+    const change = price - prevClose;
+    const pct    = prevClose > 0 ? (change / prevClose * 100) : 0;
+    const color  = change >= 0 ? "#22c55e" : "#ef4444";
     document.getElementById("price").textContent = "₹" + price.toFixed(2);
     document.getElementById("price").style.color = color;
     document.getElementById("change").textContent = (change >= 0 ? "▲ " : "▼ ") + Math.abs(change).toFixed(2) + " (" + Math.abs(pct).toFixed(2) + "%)";
     document.getElementById("change").style.color = color;
     updateIndexCard("idx-nifty", "idx-nifty-c", price, change, pct.toFixed(2));
-  } catch { document.getElementById("price").textContent = "Unavailable"; }
+    if (row) {
+      document.getElementById("price").title = `Open ${row.open} · High ${row.high} · Low ${row.low} · Prev close ${row.previousClose}`;
+    }
+  } catch {
+    const el = document.getElementById("price");
+    if (el && (el.textContent === "Loading..." || el.textContent === "Unavailable")) el.textContent = "Unavailable";
+  }
 }
 
 /* ─── KEY INDICES ─── */
 const keyIndices = [
-  { id: "bank", name: "NIFTY BANK" },
-  { id: "it",   name: "NIFTY IT" },
-  { id: "mid",  name: "NIFTY MIDCAP 100" },
-  { id: "vix",  name: "INDIA VIX" }
+  { id: "bank", name: "NIFTY BANK",       yahoo: "^NSEBANK" },
+  { id: "it",   name: "NIFTY IT",         yahoo: "^CNXIT" },
+  { id: "mid",  name: "NIFTY MIDCAP 100", yahoo: "NIFTY_MIDCAP_100.NS" },
+  { id: "vix",  name: "INDIA VIX",        yahoo: "^INDIAVIX" }
 ];
 
 function updateIndexCard(priceId, changeId, price, change, pct) {
@@ -1744,168 +1958,112 @@ function updateIndexCard(priceId, changeId, price, change, pct) {
 
 async function loadIndices() {
   try {
-    const d = await wFetch("/nse/indices", async () => {
-      const symbols = { "NIFTY BANK": "%5ENIFTYBANK", "NIFTY IT": "NIFTYIT.NS", "NIFTY MIDCAP 100": "%5ENIFTY_MIDCAP100", "INDIA VIX": "INDIAVIX.NS" };
-      const indices = [];
-      for (const [name, sym] of Object.entries(symbols)) {
-        try {
-          const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/" + sym));
-          const j = await r.json(); const m = j.chart.result[0].meta;
-          indices.push({ name, last: m.regularMarketPrice, prevClose: m.previousClose });
-        } catch {}
-      }
-      return { indices };
-    });
+    const rows = await getAllIndices();
     for (const idx of keyIndices) {
-      const found = d.indices?.find(i => i.name === idx.name);
+      const found = findIndex(rows, idx.name);
       if (!found) continue;
-      const last     = parseFloat(found.last);
-      const prevClose= parseFloat(found.prevClose || found.previousClose || last);
-      const change   = last - prevClose;
-      const pct      = prevClose > 0 ? (change / prevClose * 100).toFixed(2) : "0.00";
+      const last      = parseFloat(found.last);
+      const prevClose = parseFloat(found.previousClose);
+      if (!(last > 0)) continue;
+      const change = last - prevClose;
+      const pct    = prevClose > 0 ? (change / prevClose * 100).toFixed(2) : "0.00";
       updateIndexCard("idx-" + idx.id, "idx-" + idx.id + "-c", last, change, pct);
     }
-  } catch {}
+  } catch {
+    // Yahoo fallback — one quote per index
+    for (const idx of keyIndices) {
+      try {
+        const q = await yahooQuote(idx.yahoo);
+        if (!q) continue;
+        updateIndexCard("idx-" + idx.id, "idx-" + idx.id + "-c", q.price, q.price - q.prevClose, ((q.price - q.prevClose) / q.prevClose * 100).toFixed(2));
+      } catch {}
+    }
+  }
 }
 
-/* ─── GLOBAL MARKETS — Yahoo via Worker (most reliable) ─── */
+/* ─── GLOBAL MARKETS — Yahoo via Worker, Jina fallback ─── */
 async function loadGlobal() {
   const markets = [
-    { name: "Dow Jones",  yahoo: "%5EDJI"     },
-    { name: "Nasdaq",     yahoo: "%5EIXIC"    },
-    { name: "S&P 500",    yahoo: "%5EGSPC"    },
-    { name: "FTSE 100",   yahoo: "%5EFTSE"    },
-    { name: "Nikkei 225", yahoo: "%5EN225"    },
-    { name: "DAX",        yahoo: "%5EGDAXI"   },
-    { name: "Hang Seng",  yahoo: "%5EHSI"     },
-    { name: "SGX Nifty",  yahoo: "%5ENSEI"    },
+    { name: "Dow Jones",  yahoo: "^DJI" },
+    { name: "Nasdaq",     yahoo: "^IXIC" },
+    { name: "S&P 500",    yahoo: "^GSPC" },
+    { name: "FTSE 100",   yahoo: "^FTSE" },
+    { name: "Nikkei 225", yahoo: "^N225" },
+    { name: "DAX",        yahoo: "^GDAXI" },
+    { name: "Hang Seng",  yahoo: "^HSI" },
+    { name: "GIFT Nifty (proxy)", yahoo: "^NSEI" },
   ];
+
+  const results = await Promise.all(markets.map(async m => ({ ...m, q: await yahooQuote(m.yahoo) })));
+
   let html = "";
-
-  // Fetch all in parallel via Worker /yahoo route (or proxy fallback)
-  const results = await Promise.allSettled(markets.map(async m => {
-    try {
-      // Try Worker first — it fetches Yahoo server-side without CORS
-      const d = await wFetch(`/yahoo?s=${m.yahoo}`, async () => {
-        // Direct fallback via allorigins proxy
-        const url = `https://query1.finance.yahoo.com/v8/finance/chart/${m.yahoo}`;
-        const r   = await fetch(proxy + encodeURIComponent(url), { signal: AbortSignal.timeout(6000) });
-        const j   = await r.json();
-        const meta = j.chart.result[0].meta;
-        return { price: meta.regularMarketPrice, prevClose: meta.previousClose, name: m.name };
-      });
-      if (!d || !d.price) return { name: m.name, unavailable: true };
-      return { name: m.name, price: d.price, prevClose: d.prevClose || d.price };
-    } catch {
-      return { name: m.name, unavailable: true };
-    }
-  }));
-
-  for (const res of results) {
-    const m = res.status === "fulfilled" ? res.value : null;
-    if (!m || m.unavailable) {
-      const name = markets[results.indexOf(res)]?.name || "—";
-      html += `<div class="data-row"><span class="label">${name}</span><span class="val" style="color:var(--muted)">—</span></div>`;
+  for (const m of results) {
+    if (!m.q || !(m.q.price > 0)) {
+      html += `<div class="data-row"><span class="label">${m.name}</span><span class="val" style="color:var(--muted)">—</span></div>`;
       continue;
     }
-    const ch    = m.price - m.prevClose;
-    const pct   = m.prevClose > 0 ? (ch / m.prevClose * 100).toFixed(2) : "0.00";
+    const ch    = m.q.price - m.q.prevClose;
+    const pct   = m.q.prevClose > 0 ? (ch / m.q.prevClose * 100).toFixed(2) : "0.00";
     const color = ch >= 0 ? "#22c55e" : "#ef4444";
-    html += `<div class="data-row"><span class="label">${m.name}</span><span class="val" style="color:${color}">${m.price.toFixed(2)} <small>(${pct}%)</small></span></div>`;
+    html += `<div class="data-row"><span class="label">${m.name}</span><span class="val" style="color:${color}">${m.q.price.toFixed(2)} <small>(${pct}%)</small></span></div>`;
   }
 
   document.getElementById("global").innerHTML = html || "<div style='color:var(--muted)'>Unavailable</div>";
 }
 
-/* ─── GIFT NIFTY PANEL — via Worker/NSE ─── */
+/* ─── GIFT NIFTY PANEL — NSE allIndices ─── */
 async function loadGiftPanel() {
   try {
-    const d = await wFetch("/nse/indices", null);
-    const want = ["NIFTY 50", "INDIA VIX", "NIFTY NEXT 50", "NIFTY MIDCAP SELECT"];
+    const rows = await getAllIndices();
+    const want = ["NIFTY 50", "INDIA VIX", "NIFTY NEXT 50", "NIFTY MIDCAP 100"];
     let html = "";
     for (const name of want) {
-      const idx = d.indices?.find(i => i.name === name);
+      const idx = findIndex(rows, name);
       if (!idx) continue;
-      const color = idx.change >= 0 ? "#22c55e" : "#ef4444";
-      const note  = name === "NIFTY 50" ? " <small style='color:var(--muted);font-size:0.65rem'>(Spot price, NSE)</small>" : "";
-      html += `<div class="data-row"><span class="label">${name}${note}</span><span class="val" style="color:${color}">${parseFloat(idx.last).toFixed(2)} <small>(${parseFloat(idx.pChange).toFixed(2)}%)</small></span></div>`;
+      const chg   = parseFloat(idx.variation ?? (idx.last - idx.previousClose));
+      const color = chg >= 0 ? "#22c55e" : "#ef4444";
+      const note  = name === "NIFTY 50" ? " <small style='color:var(--muted);font-size:0.65rem'>(Spot, NSE)</small>" : "";
+      html += `<div class="data-row"><span class="label">${name}${note}</span><span class="val" style="color:${color}">${parseFloat(idx.last).toFixed(2)} <small>(${parseFloat(idx.percentChange).toFixed(2)}%)</small></span></div>`;
     }
     html += `<div style="margin-top:10px;padding:8px 10px;background:rgba(245,158,11,0.07);border-radius:8px;border-left:3px solid var(--yellow);font-size:0.72rem;color:var(--muted2);line-height:1.6">
       <strong style="color:var(--yellow)">⚠ GIFT Nifty Futures</strong><br>
-      True GIFT Nifty futures not available via NSE API. Nifty 50 Spot shown as proxy.
-      Visit <a href="https://www.nseindia.com" target="_blank" style="color:var(--accent)">nseindia.com</a> for live futures.
+      True GIFT Nifty futures are not available from the NSE API. Nifty 50 spot is shown as a proxy.
+      Check <a href="https://www.nseindia.com" target="_blank" style="color:var(--accent)">nseindia.com</a> for live futures.
     </div>
     <div style="margin-top:10px;padding:8px;background:var(--surface2);border-radius:8px;font-size:0.74rem;color:var(--muted2)">
       <strong style="color:var(--text)">VIX Guide:</strong> &lt;12 Low &nbsp;|&nbsp; 12–16 Normal &nbsp;|&nbsp; 16–20 Elevated &nbsp;|&nbsp; &gt;20 High Fear
     </div>`;
-    document.getElementById("giftPanel").innerHTML = html;
+    document.getElementById("giftPanel").innerHTML = html || "<div style='color:var(--muted)'>Unavailable</div>";
   } catch {
     document.getElementById("giftPanel").innerHTML = "<div style='color:var(--muted)'>Unavailable</div>";
   }
 }
 
-/* ─── COMMODITIES — Yahoo via Worker + Frankfurter for forex ─── */
+/* ─── COMMODITIES & FOREX — Yahoo via Worker, Jina fallback ─── */
 async function loadCommodities() {
   let html = "";
 
   const commodMap = [
-    { name: "WTI Crude",   yahoo: "CL%3DF"   },  // CL=F
-    { name: "Brent Crude", yahoo: "BZ%3DF"   },  // BZ=F
-    { name: "Gold (oz)",   yahoo: "GC%3DF"   },  // GC=F
-    { name: "Silver (oz)", yahoo: "SI%3DF"   },  // SI=F
+    { name: "WTI Crude",   yahoo: "CL=F" },
+    { name: "Brent Crude", yahoo: "BZ=F" },
+    { name: "Gold (oz)",   yahoo: "GC=F" },
+    { name: "Silver (oz)", yahoo: "SI=F" },
+    { name: "USD/INR",     yahoo: "USDINR=X", fx: true },
+    { name: "EUR/INR",     yahoo: "EURINR=X", fx: true },
   ];
 
-  const [commResults, forexResult] = await Promise.allSettled([
-    // Commodities via Worker /yahoo route
-    Promise.allSettled(commodMap.map(async c => {
-      try {
-        const d = await wFetch(`/yahoo?s=${c.yahoo}`, async () => {
-          const url = `https://query1.finance.yahoo.com/v8/finance/chart/${c.yahoo}`;
-          const r   = await fetch(proxy + encodeURIComponent(url), { signal: AbortSignal.timeout(6000) });
-          const j   = await r.json();
-          const meta = j.chart.result[0].meta;
-          return { price: meta.regularMarketPrice, prevClose: meta.previousClose };
-        });
-        if (!d?.price) return { name: c.name, unavailable: true };
-        return { name: c.name, price: d.price, prevClose: d.prevClose || d.price };
-      } catch { return { name: c.name, unavailable: true }; }
-    })),
+  const results = await Promise.all(commodMap.map(async c => ({ ...c, q: await yahooQuote(c.yahoo) })));
 
-    // Forex via Frankfurter (free, no auth, reliable)
-    (async () => {
-      try {
-        const [r1, r2] = await Promise.all([
-          fetch("https://api.frankfurter.app/latest?from=USD&to=INR", { signal: AbortSignal.timeout(5000) }),
-          fetch("https://api.frankfurter.app/latest?from=EUR&to=INR", { signal: AbortSignal.timeout(5000) }),
-        ]);
-        const [d1, d2] = await Promise.all([r1.json(), r2.json()]);
-        return { usdInr: d1.rates?.INR, eurInr: d2.rates?.INR };
-      } catch { return null; }
-    })(),
-  ]);
-
-  // Render commodities
-  const commArr = commResults.status === "fulfilled" ? commResults.value : [];
-  for (const res of commArr) {
-    const c = res.status === "fulfilled" ? res.value : null;
-    if (!c || c.unavailable) {
-      html += `<div class="data-row"><span class="label">${c?.name || "—"}</span><span class="val" style="color:var(--muted)">—</span></div>`;
+  for (const c of results) {
+    if (!c.q || !(c.q.price > 0)) {
+      html += `<div class="data-row"><span class="label">${c.name}</span><span class="val" style="color:var(--muted)">—</span></div>`;
       continue;
     }
-    const ch    = c.price - c.prevClose;
-    const pct   = c.prevClose > 0 ? (ch / c.prevClose * 100).toFixed(2) : "0.00";
-    const color = ch >= 0 ? "#22c55e" : "#ef4444";
-    html += `<div class="data-row"><span class="label">${c.name}</span><span class="val" style="color:${color}">${c.price.toFixed(2)} <small>(${pct}%)</small></span></div>`;
-  }
-
-  // Render forex
-  const forex = forexResult.status === "fulfilled" ? forexResult.value : null;
-  if (forex?.usdInr) {
-    html += `<div class="data-row"><span class="label">USD/INR</span><span class="val" style="color:var(--text)">₹${parseFloat(forex.usdInr).toFixed(2)}</span></div>`;
-    if (forex.eurInr) html += `<div class="data-row"><span class="label">EUR/INR</span><span class="val" style="color:var(--text)">₹${parseFloat(forex.eurInr).toFixed(2)}</span></div>`;
-  } else {
-    html += `<div class="data-row"><span class="label">USD/INR</span><span class="val" style="color:var(--muted)">—</span></div>`;
-    html += `<div class="data-row"><span class="label">EUR/INR</span><span class="val" style="color:var(--muted)">—</span></div>`;
+    const ch    = c.q.price - c.q.prevClose;
+    const pct   = c.q.prevClose > 0 ? (ch / c.q.prevClose * 100).toFixed(2) : "0.00";
+    const color = c.fx ? "var(--text)" : (ch >= 0 ? "#22c55e" : "#ef4444");
+    const show  = c.fx ? "₹" + c.q.price.toFixed(2) : c.q.price.toFixed(2);
+    html += `<div class="data-row"><span class="label">${c.name}</span><span class="val" style="color:${color}">${show} <small>(${pct}%)</small></span></div>`;
   }
 
   document.getElementById("commodities").innerHTML = html || "<div style='color:var(--muted)'>Unavailable</div>";
@@ -1958,24 +2116,31 @@ function toggleTickerAuto() {
   }
 }
 
-/* ─── TICKER — NSE bulk (1 call replaces 50) with Yahoo fallback ─── */
+/* ─── TICKER — NSE NIFTY 50 bulk (1 request) ─── */
 async function loadTicker() {
   try {
-    const d = await wFetch("/nse/nifty50", async () => {
-      const syms = ["RELIANCE","TCS","HDFCBANK","ICICIBANK","INFY","HINDUNILVR","ITC","LT","SBIN","BHARTIARTL","AXISBANK","KOTAKBANK","ASIANPAINT","MARUTI","WIPRO","HCLTECH","TITAN","NESTLEIND","BAJFINANCE","SUNPHARMA","ONGC","POWERGRID","NTPC","COALINDIA","JSWSTEEL","TATASTEEL","HINDALCO","BPCL","GRASIM","ULTRACEMCO","CIPLA","DRREDDY","DIVISLAB","EICHERMOT","HEROMOTOCO","BAJAJ-AUTO","M&M","TATACONSUM","BRITANNIA","APOLLOHOSP","ADANIENT","ADANIPORTS","TATAMOTORS","TECHM","LTIM","HDFCLIFE","SBILIFE","BAJAJFINSV","INDUSINDBK","IOC"];
-      const res = await Promise.allSettled(syms.map(async s => {
-        const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/"+s+".NS"));
-        const j = await r.json(); const m = j.chart.result[0].meta;
-        return { symbol:s, ltp:m.regularMarketPrice, change:m.regularMarketPrice-m.previousClose, pChange:((m.regularMarketPrice-m.previousClose)/m.previousClose*100).toFixed(2) };
-      }));
-      return { stocks: res.filter(r=>r.status==="fulfilled").map(r=>r.value) };
-    });
-    tickerData = (d.stocks||[]).map(s=>({ name:s.symbol, price:parseFloat(s.ltp).toFixed(1), chg:parseFloat(s.change), chgPct:parseFloat(parseFloat(s.pChange).toFixed(2)) }));
+    const rows = await getNifty50Stocks();
+    tickerData = rows.map(s => ({
+      name: s.symbol,
+      price: parseFloat(s.lastPrice).toFixed(1),
+      chg: parseFloat(s.change ?? (s.lastPrice - s.previousClose)),
+      chgPct: parseFloat(parseFloat(s.pChange ?? 0).toFixed(2))
+    })).filter(s => s.price !== "NaN");
     const upd = document.getElementById("tickerUpdated");
     if (upd) upd.textContent = "· " + new Date().toLocaleTimeString("en-IN",{timeZone:"Asia/Kolkata",hour:"2-digit",minute:"2-digit"});
     renderTickerPage();
     if (tickerAutoPlay) { clearInterval(tickerAutoInterval); tickerAutoInterval = setInterval(tickerNext, 4000); }
-  } catch {}
+  } catch {
+    // Yahoo fallback — limited to the first 10 names to stay light
+    const syms = ["RELIANCE","TCS","HDFCBANK","ICICIBANK","INFY","HINDUNILVR","ITC","LT","SBIN","BHARTIARTL"];
+    const qs = await Promise.all(syms.map(s => yahooQuote(s + ".NS")));
+    tickerData = qs.map((q, i) => q ? ({
+      name: syms[i], price: q.price.toFixed(1),
+      chg: q.price - q.prevClose,
+      chgPct: parseFloat(((q.price - q.prevClose) / q.prevClose * 100).toFixed(2))
+    }) : null).filter(Boolean);
+    renderTickerPage();
+  }
 }
 
 
@@ -2044,7 +2209,7 @@ function initPCRChart() {
       responsive: true,
       maintainAspectRatio: false,
       resizeDelay: 0,
-      layout: { padding: 0 },
+      layout: { padding: { left: 2, right: 4 } },
       animation: { duration: 400 },
       interaction: { mode: "index", intersect: false },
       plugins: {
@@ -2127,12 +2292,104 @@ function initPCRChart() {
   });
 }
 
-/* ─── GITHUB PERSISTENT STORAGE ─── */
+/* ─── OPTIONAL GITHUB SYNC (no token is ever hard-coded) ─── */
 const GH_USER  = "ivijaysinghchoudhary";
 const GH_REPO  = "testnew";
-const GH_TOKEN = "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";
 const GH_FILE  = "pcr_data.json";
 const GH_API   = `https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${GH_FILE}`;
+const GH_TOKEN_KEY = "marketDashboard.githubToken";
+const LS_PCR_KEY   = "marketDashboard.pcrData";
+
+function getGHToken() {
+  try { return localStorage.getItem(GH_TOKEN_KEY) || ""; } catch { return ""; }
+}
+function ghHeaders(extra = {}) {
+  const t = getGHToken();
+  return {
+    "Accept": "application/vnd.github.v3+json",
+    ...(t ? { "Authorization": `Bearer ${t}` } : {}),
+    ...extra
+  };
+}
+function setSyncStatus(msg, color) {
+  ["pcrStorageStatus", "tlogStorageStatus"].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) { el.textContent = msg; el.style.color = color; }
+  });
+}
+function configureGHToken() {
+  if (document.getElementById("ghTokenModal")) return;
+  const saved = getGHToken();
+  const wrap = document.createElement("div");
+  wrap.id = "ghTokenModal";
+  wrap.style.cssText = "position:fixed;inset:0;background:rgba(0,0,0,0.65);z-index:10000;display:flex;align-items:center;justify-content:center;padding:16px";
+  wrap.innerHTML = `
+    <div style="background:var(--surface);border:1px solid var(--border2);border-radius:12px;max-width:460px;width:100%;padding:18px;font-family:'Inter',sans-serif;box-shadow:0 12px 40px rgba(0,0,0,0.5)">
+      <div style="font-weight:700;font-size:0.95rem;margin-bottom:6px">GitHub sync <span style="color:var(--muted);font-weight:500">(optional)</span></div>
+      <div style="font-size:0.74rem;color:var(--muted2);line-height:1.6;margin-bottom:12px">
+        Use a <strong>fine-grained token</strong> with <strong>Contents: Read and write</strong> on
+        <code style="color:var(--accent)">${GH_USER}/${GH_REPO}</code> only.
+        It is stored in this browser's localStorage — never written into the HTML file.
+      </div>
+      <input id="ghTokenInput" type="password" autocomplete="off" spellcheck="false" placeholder="github_pat_…"
+        style="width:100%;box-sizing:border-box;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:9px 11px;border-radius:7px;font-size:0.8rem;font-family:ui-monospace,Consolas,monospace">
+      <div id="ghTokenNote" style="font-size:0.7rem;margin-top:8px;color:${saved ? "#22c55e" : "var(--muted)"}">
+        ${saved ? "✓ A token is already saved in this browser." : "No token saved — data stays in this browser."}
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:16px">
+        <button data-act="remove" style="background:transparent;border:1px solid var(--border2);color:#ef4444;padding:7px 12px;border-radius:7px;font-size:0.75rem;cursor:pointer;font-family:inherit">Remove</button>
+        <button data-act="cancel" style="background:transparent;border:1px solid var(--border2);color:var(--muted2);padding:7px 12px;border-radius:7px;font-size:0.75rem;cursor:pointer;font-family:inherit">Cancel</button>
+        <button data-act="save" style="background:var(--accent);border:1px solid var(--accent);color:#0a0a0a;font-weight:700;padding:7px 14px;border-radius:7px;font-size:0.75rem;cursor:pointer;font-family:inherit">Save token</button>
+      </div>
+    </div>`;
+  document.body.appendChild(wrap);
+
+  const close = () => wrap.remove();
+  const note  = (msg, color) => { const n = document.getElementById("ghTokenNote"); if (n) { n.textContent = msg; n.style.color = color; } };
+
+  wrap.addEventListener("click", e => { if (e.target === wrap) close(); });
+  wrap.addEventListener("keydown", e => { if (e.key === "Escape") close(); });
+  wrap.querySelector('[data-act="cancel"]').onclick = close;
+  wrap.querySelector('[data-act="remove"]').onclick = () => {
+    try { localStorage.removeItem(GH_TOKEN_KEY); } catch {}
+    close();
+    setSyncStatus("GitHub sync off — saving locally in this browser", "#f59e0b");
+  };
+  wrap.querySelector('[data-act="save"]').onclick = () => {
+    const v = (document.getElementById("ghTokenInput")?.value || "").trim();
+    if (!v) { note("Paste a token first, or press Remove.", "#f59e0b"); return; }
+    if (v.includes("••")) { note("That is the masked placeholder — paste the real token.", "#f59e0b"); return; }
+    try {
+      localStorage.setItem(GH_TOKEN_KEY, v);
+    } catch {
+      note("localStorage is unavailable in this browser.", "#ef4444");
+      return;
+    }
+    close();
+    setSyncStatus("Token saved — reloading to connect…", "#22c55e");
+    location.reload();
+  };
+  setTimeout(() => document.getElementById("ghTokenInput")?.focus(), 30);
+}
+function b64Encode(str) { return btoa(unescape(encodeURIComponent(str))); }
+function b64Decode(str) { return decodeURIComponent(escape(atob(str))); }
+
+/* Serialize GitHub writes — two quick edits must not race on the same blob SHA (HTTP 409). */
+let ghWriteChain = Promise.resolve();
+function ghEnqueue(fn) {
+  const run = ghWriteChain.then(fn, fn);   // run even if the previous write failed
+  ghWriteChain = run.catch(() => {});
+  return run;
+}
+function lsReadPCR() {
+  try {
+    const raw = localStorage.getItem(LS_PCR_KEY);
+    return raw ? JSON.parse(raw) : null;
+  } catch { return null; }
+}
+function lsWritePCR(data) {
+  try { localStorage.setItem(LS_PCR_KEY, JSON.stringify(data)); return true; } catch { return false; }
+}
 
 function todayIST() {
   // Must return IST date (not UTC) — UTC date is wrong for India timezone
@@ -2144,78 +2401,72 @@ function todayIST() {
 }
 
 async function ghReadPCR() {
-  try {
-    const r = await fetch(GH_API, {
-      headers: { Authorization: `token ${GH_TOKEN}`, Accept: "application/vnd.github.v3+json" }
-    });
-    if (!r.ok) return null;
-    const meta = await r.json();
-    const content = JSON.parse(atob(meta.content.replace(/\n/g, "")));
-    return { data: content, sha: meta.sha };
-  } catch { return null; }
+  // Prefer GitHub (cross-device) when a token is configured, then local cache.
+  if (getGHToken()) {
+    try {
+      const r = await fetch(GH_API, { headers: ghHeaders() });
+      if (r.ok) {
+        const meta = await r.json();
+        const content = JSON.parse(b64Decode(meta.content.replace(/\n/g, "")));
+        return { data: content, sha: meta.sha, source: "github" };
+      }
+    } catch {}
+  }
+  const local = lsReadPCR();
+  return local ? { data: local, sha: null, source: "local" } : null;
 }
 
 async function ghWritePCR(newPoint) {
-  // Read existing file first (need SHA for update)
+  return ghEnqueue(() => ghWritePCRNow(newPoint));
+}
+
+async function ghWritePCRNow(newPoint) {
   const existing = await ghReadPCR();
   const today = todayIST();
 
   let stored = existing ? existing.data : {};
-  // Reset if new day
-  if (!stored.date || stored.date !== today) {
-    stored = { date: today, points: [] };
-  }
-
-  // Avoid duplicate timestamps
-  const alreadyExists = stored.points.some(p => p.time === newPoint.time);
-  if (alreadyExists) return;
+  if (!stored.date || stored.date !== today) stored = { date: today, points: [] };
+  if (stored.points.some(p => p.time === newPoint.time)) return;
 
   stored.points.push(newPoint);
-  // Keep max 26 points
   if (stored.points.length > 26) stored.points.shift();
+
+  lsWritePCR(stored); // always keep a local copy
+
+  const el = document.getElementById("pcrStorageStatus");
+  if (!getGHToken()) {
+    if (el) { el.textContent = "✓ Saved locally (add a GitHub token to sync)"; el.style.color = "#22c55e"; }
+    return;
+  }
 
   const body = {
     message: `PCR update ${today} ${newPoint.time}`,
-    content: btoa(JSON.stringify(stored, null, 2)),
-    ...(existing ? { sha: existing.sha } : {})
+    content: b64Encode(JSON.stringify(stored, null, 2)),
+    ...(existing?.sha ? { sha: existing.sha } : {})
   };
-
   try {
-    await fetch(GH_API, {
-      method: "PUT",
-      headers: {
-        Authorization: `token ${GH_TOKEN}`,
-        Accept: "application/vnd.github.v3+json",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(body)
-    });
-    // Update status indicator
-    const el = document.getElementById("pcrStorageStatus");
+    const r = await fetch(GH_API, { method: "PUT", headers: ghHeaders({ "Content-Type": "application/json" }), body: JSON.stringify(body) });
+    if (!r.ok) throw new Error("HTTP " + r.status);
     if (el) { el.textContent = "✓ Saved to GitHub " + newPoint.time; el.style.color = "#22c55e"; }
   } catch {
-    const el = document.getElementById("pcrStorageStatus");
-    if (el) { el.textContent = "⚠ Save failed"; el.style.color = "#ef4444"; }
+    if (el) { el.textContent = "⚠ GitHub save failed — saved locally"; el.style.color = "#f59e0b"; }
   }
 }
 
 async function ghLoadPCRHistory() {
   const el = document.getElementById("pcrStorageStatus");
-  if (el) { el.textContent = "⟳ Loading from GitHub..."; el.style.color = "#f59e0b"; }
+  if (el) { el.textContent = getGHToken() ? "⟳ Loading from GitHub..." : "⟳ Loading local history..."; el.style.color = "#f59e0b"; }
 
   const existing = await ghReadPCR();
   if (!existing) {
-    if (el) { el.textContent = "No saved data yet — will save on first reading"; el.style.color = "#64748b"; }
+    if (el) { el.textContent = "No saved history yet — first reading will be saved"; el.style.color = "#64748b"; }
     return;
   }
 
   const today  = todayIST();
   const stored = existing.data;
+  console.log(`PCR load (${existing.source}): stored.date=${stored.date}, today=${today}, points=${stored.points?.length}`);
 
-  // Debug — log what we got vs today
-  console.log(`PCR load: stored.date=${stored.date}, today=${today}, points=${stored.points?.length}`);
-
-  // Only load today's data
   if (!stored.date || stored.date !== today || !stored.points?.length) {
     if (el) { el.textContent = `No data for today (${today}) yet`; el.style.color = "#64748b"; }
     return;
@@ -2265,8 +2516,20 @@ function updatePCRChart(pcr, label) {
   const smrVal = pcrToSMR(pcr);
   const col = smrColor(smrVal);
 
-  // Check if this timestamp already exists (avoid duplicates on page refresh)
-  if (!pcrHistory.labels.includes(timeStr)) {
+  // Only sample during the live session, at most once every ~10 minutes.
+  // (The feed refreshes every 15 min; page reloads must not add duplicate points.)
+  const sess = getMarketSession();
+  const inSession = sess.isTradingDay && sess.mins >= 555 && sess.mins <= sess.foClose;
+  const lastLabel = pcrHistory.labels[pcrHistory.labels.length - 1];
+  let gapOk = true;
+  if (lastLabel) {
+    const [lh, lm] = lastLabel.split(":").map(Number);
+    const [nh, nm] = timeStr.split(":").map(Number);
+    const diff = (nh * 60 + nm) - (lh * 60 + lm);
+    gapOk = diff >= 10;
+  }
+
+  if (inSession && gapOk && !pcrHistory.labels.includes(timeStr)) {
     pcrHistory.labels.push(timeStr);
     pcrHistory.values.push(pcr);
     pcrHistory.smr.push(smrVal);
@@ -2277,7 +2540,7 @@ function updatePCRChart(pcr, label) {
       pcrHistory.smr.shift(); pcrHistory.colors.shift();
     }
 
-    // Save to GitHub
+    // Save to GitHub / local
     ghWritePCR({ time: timeStr, pcr, smr: smrVal });
   }
 
@@ -2293,38 +2556,63 @@ function updatePCRChart(pcr, label) {
   pcrChartInstance.update("none");
 }
 
-/* ─── PCR (PUT/CALL RATIO) ─── */
+/* ─── PCR (PUT/CALL RATIO) — NSE option chain ─── */
+let _ocCache = { key: "", ts: 0, data: null, promise: null };
+async function getOptionChain(apiDate, maxAgeMs = 45000) {
+  if (_ocCache.key === apiDate && _ocCache.data && Date.now() - _ocCache.ts < maxAgeMs) return _ocCache.data;
+  if (_ocCache.key === apiDate && _ocCache.promise) return _ocCache.promise;
+  _ocCache.key = apiDate;
+  _ocCache.promise = nseAPI(`/api/option-chain-v3?type=Indices&symbol=NIFTY&expiry=${encodeURIComponent(apiDate)}`)
+    .then(j => {
+      const rows = j?.records?.data || [];
+      if (!rows.length) throw new Error("empty option chain");
+      _ocCache.data = rows; _ocCache.ts = Date.now();
+      return rows;
+    })
+    .finally(() => { _ocCache.promise = null; });
+  return _ocCache.promise;
+}
+
 async function loadPCR() {
   try {
-    // Try real NSE OI-based PCR from Worker first
     let pcrNum, vix, label, color, isRealPCR = false;
+    let totalCE = 0, totalPE = 0;
+    const expiry = getTargetExpiry();
 
     try {
-      const pcrData = await wFetch("/nse/pcr", null);
-      if (pcrData?.pcr) {
-        pcrNum    = parseFloat(pcrData.pcr.toFixed(2));
-        isRealPCR = true;
-        // Also get VIX from indices call (cached)
-        const idxData = await wFetch("/nse/indices", null);
-        const vixIdx  = idxData?.indices?.find(i => i.name === "INDIA VIX");
-        vix = vixIdx ? parseFloat(vixIdx.last) : 15;
+      const rows = await getOptionChain(expiry.apiDate);
+      for (const r of rows) {
+        totalCE += parseFloat(r.CE?.openInterest || 0);
+        totalPE += parseFloat(r.PE?.openInterest || 0);
       }
-    } catch {}
+      if (totalCE > 0 && totalPE > 0) {
+        pcrNum = parseFloat((totalPE / totalCE).toFixed(2));
+        isRealPCR = true;
+      }
+    } catch (e) { console.log("Option-chain PCR unavailable:", e.message); }
 
-    // Fallback: VIX-derived PCR proxy
+    // VIX from the shared NSE indices cache, with Yahoo fallback
+    try {
+      const idxRows = await getAllIndices();
+      const v = findIndex(idxRows, "INDIA VIX");
+      vix = parseFloat(v?.last);
+    } catch {}
+    if (!(vix > 0)) {
+      const q = await yahooQuote("^INDIAVIX");
+      vix = q?.price || 15;
+    }
+
+    // Fallback: VIX-derived PCR proxy (clearly labelled)
     if (!isRealPCR) {
-      const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/INDIAVIX.NS"));
-      const d = await r.json();
-      vix    = d.chart.result[0].meta.regularMarketPrice;
       pcrNum = parseFloat(Math.max(0.6, Math.min(1.5, (1.0 + (20 - vix) / 40))).toFixed(2));
     }
 
     const smr = pcrToSMR(pcrNum);
-    if (pcrNum < 0.75)      { label = "Extreme Greed (Bearish)";       color = "#ef4444"; }
-    else if (pcrNum < 0.9)  { label = "Greed Zone";                    color = "#f97316"; }
-    else if (pcrNum <= 1.1) { label = "Neutral Market";                color = "#f59e0b"; }
-    else if (pcrNum <= 1.3) { label = "Fear Zone (Bullish)";           color = "#84cc16"; }
-    else                    { label = "Extreme Fear (Strong Buy)";      color = "#22c55e"; }
+    if (pcrNum < 0.75)      { label = "Extreme Greed (Bearish)";  color = "#ef4444"; }
+    else if (pcrNum < 0.9)  { label = "Greed Zone";               color = "#f97316"; }
+    else if (pcrNum <= 1.1) { label = "Neutral Market";           color = "#f59e0b"; }
+    else if (pcrNum <= 1.3) { label = "Fear Zone (Bullish)";      color = "#84cc16"; }
+    else                    { label = "Extreme Fear (Strong Buy)";color = "#22c55e"; }
 
     document.getElementById("pcrValue").textContent = pcrNum.toFixed(2);
     document.getElementById("pcrValue").style.color = color;
@@ -2337,19 +2625,20 @@ async function loadPCR() {
 
     const smrCol = smrColor(smr);
     const sourceTag = isRealPCR
-      ? `<span style="color:#22c55e;font-size:0.65rem">✓ Real NSE OI PCR</span>`
-      : `<span style="color:#f59e0b;font-size:0.65rem">⚠ VIX proxy (deploy Worker for real PCR)</span>`;
+      ? `<span style="color:#22c55e;font-size:0.65rem">✓ NSE OI PCR · ${expiry.apiDate}</span>`
+      : `<span style="color:#f59e0b;font-size:0.65rem">⚠ VIX proxy — NSE option chain unavailable</span>`;
 
     document.getElementById("pcrDetails").innerHTML = `
+      <div class="data-row"><span class="label">Expiry used</span><span class="val">${expiry.apiDate} <small style="color:var(--muted)">(${expiry.isMonthly ? "monthly" : "weekly"})</small></span></div>
       <div class="data-row"><span class="label">India VIX</span><span class="val">${vix.toFixed(2)}</span></div>
-      <div class="data-row"><span class="label">PCR</span><span class="val" style="color:${color}">${pcrNum.toFixed(2)} — ${label}</span></div>
+      <div class="data-row"><span class="label">PCR (PE OI / CE OI)</span><span class="val" style="color:${color}">${pcrNum.toFixed(2)} — ${label}</span></div>
+      ${isRealPCR ? `<div class="data-row"><span class="label">Total PE / CE OI</span><span class="val"><small>${Math.round(totalPE).toLocaleString("en-IN")} / ${Math.round(totalCE).toLocaleString("en-IN")}</small></span></div>` : ""}
       <div class="data-row"><span class="label">SMR Score</span><span class="val" style="color:${smrCol};font-weight:700">${smr} / 100</span></div>
       <div class="data-row"><span class="label">Source</span><span class="val">${sourceTag}</span></div>`;
 
     updatePCRChart(pcrNum, label);
     await updateFearGreed(vix, pcrNum);
 
-    // Update last updated time on PCR panel
     const pcrTs = document.getElementById("pcrLastUpdated");
     if (pcrTs) {
       const now = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
@@ -2366,21 +2655,16 @@ let nifty52wHigh = null;
 async function fetchNifty52wHigh() {
   if (nifty52wHigh) return nifty52wHigh;
   try {
-    // Use NSE nifty50 bulk data — already has yearHigh per stock
-    // Get Nifty index 52w high from NSE indices endpoint
-    const d = await wFetch("/nse/indices", async () => {
-      const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=1y&interval=1d"));
-      const j = await r.json();
-      const closes = j.chart.result[0].indicators.quote[0].close.filter(v => v != null);
-      return { indices: [{ name: "NIFTY 50", yearHigh: Math.max(...closes), last: j.chart.result[0].meta.regularMarketPrice }] };
-    });
-    const nifty = d.indices?.find(i => i.name === "NIFTY 50");
-    if (nifty?.yearHigh) {
-      nifty52wHigh = parseFloat(nifty.yearHigh);
-      return nifty52wHigh;
-    }
-    return null;
-  } catch { return null; }
+    const rows = await getAllIndices();
+    const n = findIndex(rows, "NIFTY 50");
+    if (n?.yearHigh) { nifty52wHigh = parseFloat(n.yearHigh); return nifty52wHigh; }
+  } catch {}
+  try {
+    const j = await yahooChart("^NSEI", "1y", "1d");
+    const closes = (j.chart.result[0].indicators.quote[0].close || []).filter(v => v != null);
+    if (closes.length) { nifty52wHigh = Math.max(...closes); return nifty52wHigh; }
+  } catch {}
+  return null;
 }
 
 async function updateFearGreed(vix, pcr) {
@@ -2454,27 +2738,21 @@ const nifty100 = [
   "UNITDSPR.NS","UPL.NS","VEDL.NS","VOLTAS.NS","ZYDUSLIFE.NS"
 ];
 
-/* ─── ADVANCE/DECLINE — NSE bulk (1 call replaces 100) ─── */
+/* ─── ADVANCE/DECLINE — NIFTY 100 via NSE allIndices (1 request) ─── */
 async function loadAdvanceDecline() {
   document.getElementById("adBreadth").innerHTML = `<span style="color:var(--muted)">Loading...</span>`;
   try {
-    const d = await wFetch("/nse/nifty100", async () => {
-      // Yahoo fallback — batches of 10
-      let adv=0,dec=0,unch=0,done=0;
-      for (let i=0;i<nifty100.length;i+=10) {
-        await Promise.all(nifty100.slice(i,i+10).map(async s => {
-          try {
-            const r=await fetch(proxy+encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/"+s));
-            const j=await r.json(); const m=j.chart.result[0].meta;
-            const ch=m.regularMarketPrice-m.previousClose, pct=Math.abs(ch/m.previousClose*100);
-            if(ch>0&&pct>0.1) adv++; else if(ch<0&&pct>0.1) dec++; else unch++;
-          } catch {} done++;
-        }));
-      }
-      const total=adv+dec+unch;
-      return { advances:adv, declines:dec, unchanged:unch, total, ratio:dec>0?(adv/dec).toFixed(2):"∞", breadth:total>0?Math.round(adv/total*100):50 };
-    });
-    const { advances:adv, declines:dec, unchanged:unch, total, ratio, breadth:breadthPct } = d;
+    const rows = await getAllIndices();
+    const n100 = findIndex(rows, "NIFTY 100");
+    if (!n100) throw new Error("NIFTY 100 missing");
+    const adv = parseInt(n100.advances) || 0;
+    const dec = parseInt(n100.declines) || 0;
+    const unch = parseInt(n100.unchanged) || 0;
+    const total = adv + dec + unch;
+    if (!total) throw new Error("no breadth data");
+    const ratio = dec > 0 ? (adv / dec).toFixed(2) : "∞";
+    const breadthPct = Math.round(adv / total * 100);
+
     const breadthColor = breadthPct>60?"#22c55e":breadthPct<40?"#ef4444":"#f59e0b";
     document.getElementById("adAdv").textContent = adv;
     document.getElementById("adDec").textContent = dec;
@@ -2487,28 +2765,42 @@ async function loadAdvanceDecline() {
     document.getElementById("adDecArc").style.strokeDasharray = `${(dec/total)*circ} ${circ}`;
     document.getElementById("adDecArc").style.strokeDashoffset = -(adv/total)*circ;
     document.getElementById("adDecArc").setAttribute("transform",`rotate(${-90+(adv/total)*360} 45 45)`);
-  } catch {}
+  } catch {
+    // Fallback: compute breadth from NIFTY 50 constituent quotes
+    try {
+      const rows = await getNifty50Stocks();
+      let adv=0, dec=0, unch=0;
+      for (const s of rows) {
+        const p = parseFloat(s.pChange) || 0;
+        if (p > 0.1) adv++; else if (p < -0.1) dec++; else unch++;
+      }
+      const total = adv+dec+unch || 1;
+      const ratio = dec > 0 ? (adv/dec).toFixed(2) : "∞";
+      const breadthPct = Math.round(adv/total*100);
+      document.getElementById("adAdv").textContent = adv;
+      document.getElementById("adDec").textContent = dec;
+      document.getElementById("adUnch").textContent = unch;
+      document.getElementById("adTotal").textContent = `${total} / 50`;
+      document.getElementById("adRatio").textContent = ratio;
+      document.getElementById("adBreadth").innerHTML = `<span style="color:#f59e0b">${breadthPct}% bullish (Nifty 50)</span>`;
+    } catch {}
+  }
 }
 
-/* ─── 52-WEEK — NSE bulk (1 call replaces 50×1yr) ─── */
+/* ─── 52-WEEK — NSE NIFTY 50 bulk (1 request) ─── */
 async function load52Week() {
   try {
-    const d = await wFetch("/nse/nifty50", async () => {
-      // Yahoo fallback stays as before
-      return null;
-    });
-    if (!d || !d.stocks) throw new Error("no data");
-
-    let rows = "";
-    for (const s of d.stocks) {
-      const current = parseFloat(s.ltp);
+    const stocks = await getNifty50Stocks();
+    const rows = stocks.map(s => {
+      const current = parseFloat(s.lastPrice);
       const high52  = parseFloat(s.yearHigh);
       const low52   = parseFloat(s.yearLow);
-      const range   = high52 - low52;
-      const pos     = range > 0 ? ((current - low52) / range * 100).toFixed(0) : 50;
-      const fromHigh= ((current - high52) / high52 * 100).toFixed(1);
-      const fromLow = ((current - low52)  / low52  * 100).toFixed(1);
-      rows += `<tr>
+      if (!(current > 0 && high52 > 0 && low52 > 0)) return "";
+      const range    = high52 - low52;
+      const pos      = range > 0 ? Math.min(100, Math.max(0, (current - low52) / range * 100)).toFixed(0) : 50;
+      const fromHigh = ((current - high52) / high52 * 100).toFixed(1);
+      const fromLow  = ((current - low52)  / low52  * 100).toFixed(1);
+      return `<tr>
         <td style="font-weight:600;color:var(--text)">${s.symbol}</td>
         <td style="color:var(--text)">₹${current.toFixed(1)}</td>
         <td style="color:var(--red)">₹${low52.toFixed(1)}</td>
@@ -2518,93 +2810,205 @@ async function load52Week() {
         </td>
         <td style="color:var(--green)">₹${high52.toFixed(1)}</td>
         <td style="color:${parseFloat(fromHigh)<-20?"#ef4444":"#f59e0b"}">${fromHigh}%</td>
-        <td style="color:${parseFloat(fromLow)>20?"#22c55e":"#94a3b8"}">${fromLow>0?"+":""}${fromLow}%</td>
+        <td style="color:${parseFloat(fromLow)>20?"#22c55e":"#94a3b8"}">${parseFloat(fromLow)>0?"+":""}${fromLow}%</td>
       </tr>`;
-    }
+    }).filter(Boolean).join("");
+
     document.getElementById("week52Body").innerHTML = rows || `<tr><td colspan="7" style="color:var(--muted);padding:16px;text-align:center">No data</td></tr>`;
   } catch {
-    // Silent fail — show last data
-    document.getElementById("week52Body").innerHTML = `<tr><td colspan="7" style="color:var(--muted);padding:16px;text-align:center">Worker unavailable — deploy Worker for fast 52W data</td></tr>`;
+    document.getElementById("week52Body").innerHTML = `<tr><td colspan="7" style="color:var(--muted);padding:16px;text-align:center">52-week data unavailable — NSE feed could not be reached</td></tr>`;
   }
 }
 
-/* ─── ANNOUNCEMENTS ─── */
-async function loadAnnouncements() {
-  // RBI RSS
-  try {
-    const r = await fetch("https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://rbi.org.in/Scripts/RSSFeed.aspx?Id=9"));
-    const d = await r.json();
-    let html = "";
-    const items = (d.items || []).slice(0, 6);
-    for (const item of items) {
-      html += `<div class="ann-item">
-        <div><span class="ann-badge badge-rbi">RBI</span></div>
-        <div class="ann-title"><a href="${item.link}" target="_blank" style="color:var(--text);text-decoration:none">${item.title}</a></div>
-        <div class="ann-date">${new Date(item.pubDate).toDateString()}</div>
-      </div>`;
-    }
-    document.getElementById("annRBI").innerHTML = html || "<div style='color:var(--muted)'>No recent announcements</div>";
-  } catch {
-    document.getElementById("annRBI").innerHTML = `
-      <div class="ann-item"><span class="ann-badge badge-rbi">RBI</span>
-      <div class="ann-title">RBI Monetary Policy Committee – Next Meeting Scheduled</div>
-      <div class="ann-date">Check <a href="https://rbi.org.in" target="_blank" style="color:var(--accent)">rbi.org.in</a> for latest</div></div>
-      <div class="ann-item"><span class="ann-badge badge-rbi">RBI</span>
-      <div class="ann-title">Repo Rate: 6.50% (as of last policy)</div>
-      <div class="ann-date">Monitor for changes at each bi-monthly review</div></div>`;
+/* ─── ANNOUNCEMENTS & NEWS (RSS via rss2json, with multi-feed fallback) ─── */
+function escHtml(s) {
+  return String(s ?? "")
+    // feeds often ship pre-escaped text ("&amp;"), decode once before escaping to avoid "&amp;amp;"
+    .replace(/&(amp|lt|gt|quot|apos|nbsp|#39);/gi, (m, e) => ({
+      amp: "&", lt: "<", gt: ">", quot: '"', apos: "'", nbsp: " ", "#39": "'"
+    }[e.toLowerCase()] ?? m))
+    .replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+function rssDate(d) {
+  const t = new Date(d);
+  if (!d || isNaN(t)) return "";
+  return t.toDateString();
+}
+// Try feeds in order; keep the first one that returns usable items.
+async function rssItems(urls, filterFn) {
+  for (const url of urls) {
+    try {
+      const r = await fetch("https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent(url));
+      if (!r.ok) continue;
+      const d = await r.json();
+      if (d.status !== "ok" || !Array.isArray(d.items)) continue;
+      let items = d.items.filter(i => i && i.title);
+      if (filterFn) {
+        const matched = items.filter(filterFn);
+        if (matched.length >= 2) items = matched; // prefer topical matches, else keep the feed as-is
+      }
+      if (items.length) return items;
+    } catch {}
   }
+  return [];
+}
 
-  // NSE Corporate Results via MoneyControl RSS
-  try {
-    const r = await fetch("https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent("https://www.moneycontrol.com/rss/results.xml"));
-    const d = await r.json();
-    let html = "";
-    const items = (d.items || []).slice(0, 6);
-    for (const item of items) {
-      html += `<div class="ann-item">
-        <div><span class="ann-badge badge-result">RESULT</span></div>
-        <div class="ann-title"><a href="${item.link}" target="_blank" style="color:var(--text);text-decoration:none">${item.title}</a></div>
-        <div class="ann-date">${new Date(item.pubDate).toDateString()}</div>
-      </div>`;
-    }
-    document.getElementById("annNSE").innerHTML = html || "<div style='color:var(--muted)'>No recent results</div>";
-  } catch {
-    document.getElementById("annNSE").innerHTML = "<div style='color:var(--muted)'>Results feed unavailable</div>";
-  }
+const RBI_FEEDS = [
+  "https://www.business-standard.com/rss/economy-102.rss",
+  "https://www.livemint.com/rss/economy"
+];
+const RESULT_FEEDS = [
+  "https://www.business-standard.com/rss/companies-101.rss",
+  "https://economictimes.indiatimes.com/markets/stocks/rssfeeds/2146842.cms"
+];
+
+async function loadAnnouncements() {
+  const rbiEl = document.getElementById("annRBI");
+  const nseEl = document.getElementById("annNSE");
+
+  // Always show the verified policy snapshot (63rd MPC, 5–7 Oct 2026), then live headlines if any.
+  const policyCard = `<div class="ann-item">
+      <div><span class="ann-badge badge-rbi">RBI</span></div>
+      <div class="ann-title">MPC 5–7 Oct 2026 · Repo <strong>5.50%</strong> (+25 bps) · Stance: <strong>Calibrated tightening</strong></div>
+      <div class="ann-date">SDF 5.25% · MSF &amp; Bank Rate 5.75% · Next MPC: 2–4 Dec 2026</div>
+    </div>`;
+
+  const rbiPool  = (await Promise.all(RBI_FEEDS.map(f => rssItems([f])))).flat();
+  const rbiItems = rbiPool
+    .filter(i => /rbi|reserve bank|repo rate|monetary policy|policy rate|inflation|cpi/i.test(i.title))
+    .slice(0, 4);
+  rbiEl.innerHTML = policyCard + rbiItems.map(item => `<div class="ann-item">
+        <div><span class="ann-badge badge-rbi">POLICY</span></div>
+        <div class="ann-title"><a href="${escHtml(item.link)}" target="_blank" rel="noopener" style="color:var(--text);text-decoration:none">${escHtml(item.title)}</a></div>
+        <div class="ann-date">${escHtml(rssDate(item.pubDate))}</div>
+      </div>`).join("");
+
+  // Corporate results & NSE announcements
+  const resPool = (await Promise.all(RESULT_FEEDS.map(f => rssItems([f])))).flat();
+  let resItems = resPool.filter(i => /result|q[1-4]\b|profit|revenue|earnings|nse|bse|board/i.test(i.title)).slice(0, 6);
+  let resBadge = "RESULT";
+  if (!resItems.length) { resItems = resPool.slice(0, 6); resBadge = "NEWS"; }
+  nseEl.innerHTML = resItems.length
+    ? resItems.map(item => `<div class="ann-item">
+        <div><span class="ann-badge badge-result">${resBadge}</span></div>
+        <div class="ann-title"><a href="${escHtml(item.link)}" target="_blank" rel="noopener" style="color:var(--text);text-decoration:none">${escHtml(item.title)}</a></div>
+        <div class="ann-date">${escHtml(rssDate(item.pubDate))}</div>
+      </div>`).join("")
+    : `<div style="color:var(--muted);font-size:0.8rem;line-height:1.6">Results feed unavailable right now.<br>
+       See <a href="https://www.nseindia.com/companies-listing/corporate-filings-financial-results" target="_blank" rel="noopener" style="color:var(--accent)">NSE corporate results</a>.</div>`;
 }
 
 /* ─── RSS NEWS ─── */
 async function fetchRSS(url, id) {
-  try {
-    const r = await fetch("https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent(url));
-    const d = await r.json();
-    let html = "";
-    for (let i = 0; i < 10; i++) {
-      const n = d.items[i];
-      html += `<div class="news-item">
-        <a href="${n.link}" target="_blank">${n.title}</a>
-        <div class="news-date">${new Date(n.pubDate).toDateString()}</div>
-      </div>`;
-    }
-    document.querySelector("#" + id + " .content").innerHTML = html;
-  } catch { document.querySelector("#" + id + " .content").innerHTML = "<div style='color:var(--muted)'>Feed unavailable</div>"; }
+  const box = document.querySelector("#" + id + " .content");
+  if (!box) return;
+  const items = await rssItems([url]);
+  box.innerHTML = items.length
+    ? items.slice(0, 10).map(n => `<div class="news-item">
+        <a href="${escHtml(n.link)}" target="_blank" rel="noopener">${escHtml(n.title)}</a>
+        <div class="news-date">${escHtml(rssDate(n.pubDate))}</div>
+      </div>`).join("")
+    : "<div style='color:var(--muted)'>Feed unavailable</div>";
 }
 
-/* ─── CHART TAB SWITCHER ─── */
-function showChartTab(tab, btn) {
+/* ─── NIFTY CHART (Chart.js + Yahoo data via Jina) ─── */
+let niftyChartInstance = null;
+let niftyChartRange = "1d";
+
+function showChartRange(range, btn) {
   document.querySelectorAll("#chartTabBar .tab-btn").forEach(b => b.classList.remove("active"));
-  btn.classList.add("active");
-  document.getElementById("chartTab-dhan").style.display   = tab === "dhan"   ? "block" : "none";
-  document.getElementById("chartTab-google").style.display = tab === "google" ? "block" : "none";
+  if (btn) btn.classList.add("active");
+  niftyChartRange = range;
+  loadNiftyChart(range);
 }
 
-// Auto-reload chart iframes every 5 min to keep data fresh
-setInterval(() => {
-  ["chartTab-dhan", "chartTab-google"].forEach(id => {
-    const iframe = document.querySelector(`#${id} iframe`);
-    if (iframe) { const src = iframe.src; iframe.src = ""; iframe.src = src; }
-  });
-}, 5 * 60 * 1000);
+async function loadNiftyChart(range = "1d") {
+  const note = document.getElementById("chartLoadNote");
+  const canvas = document.getElementById("niftyChart");
+  if (!canvas) return;
+  if (note) { note.textContent = "Loading…"; note.style.color = "var(--muted)"; }
+
+  const cfg = { "1d": ["1d","5m"], "1mo": ["1mo","1d"], "1y": ["1y","1d"] }[range] || ["1d","5m"];
+  try {
+    const j = await yahooChart("^NSEI", cfg[0], cfg[1], 18000);
+    const res = j.chart.result[0];
+    const ts = res.timestamp || [];
+    const closes = res.indicators.quote[0].close || [];
+    const pts = ts.map((t, i) => ({ t: t * 1000, y: closes[i] })).filter(p => p.y != null);
+    if (!pts.length) throw new Error("no chart points");
+
+    const labels = pts.map(p => {
+      const d = new Date(p.t);
+      if (range === "1d") return d.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false });
+      if (range === "1y") return d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", month: "short", year: "2-digit" });
+      return d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short" });
+    });
+    const values = pts.map(p => p.y);
+    const first = values[0], last = values[values.length - 1];
+    const up = last >= first;
+    const lineColor = up ? "#22c55e" : "#ef4444";
+    const fillColor = up ? "rgba(34,197,94,0.10)" : "rgba(239,68,68,0.10)";
+
+    if (niftyChartInstance) { niftyChartInstance.destroy(); niftyChartInstance = null; }
+
+    niftyChartInstance = new Chart(canvas.getContext("2d"), {
+      type: "line",
+      data: {
+        labels,
+        datasets: [{
+          data: values,
+          borderColor: lineColor,
+          backgroundColor: fillColor,
+          borderWidth: 2,
+          pointRadius: 0,
+          pointHoverRadius: 4,
+          tension: 0.15,
+          fill: true
+        }]
+      },
+      options: {
+        responsive: true,
+        maintainAspectRatio: false,
+        animation: false,
+        interaction: { mode: "index", intersect: false },
+        plugins: {
+          legend: { display: false },
+          tooltip: {
+            callbacks: {
+              label: c => "₹" + Number(c.parsed.y).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+            }
+          }
+        },
+        scales: {
+          x: {
+            grid: { color: "#262626" },
+            ticks: { color: "#94a3b8", maxTicksLimit: 9, font: { family: "Inter", size: 10 } }
+          },
+          y: {
+            position: "right",
+            grid: { color: "#262626" },
+            ticks: {
+              color: "#94a3b8", font: { family: "Inter", size: 10 },
+              callback: v => Number(v).toLocaleString("en-IN")
+            }
+          }
+        }
+      }
+    });
+
+    const pct = first > 0 ? ((last - first) / first * 100) : 0;
+    if (note) {
+      note.textContent = `${last.toLocaleString("en-IN", { minimumFractionDigits: 2 })} (${pct >= 0 ? "+" : ""}${pct.toFixed(2)}%)`;
+      note.style.color = up ? "#22c55e" : "#ef4444";
+    }
+  } catch (e) {
+    console.log("Nifty chart failed:", e.message);
+    if (note) { note.textContent = "Chart unavailable — use the links above"; note.style.color = "#f59e0b"; }
+  }
+}
+
+// Refresh chart every 5 min
+setInterval(() => loadNiftyChart(niftyChartRange), 5 * 60 * 1000);
 
 /* ─── AUTO-REFRESH INDICATOR ─── */
 let refreshCountdown = 15;
@@ -2651,11 +3055,11 @@ function renderFIITable(tbodyId, rows) {
     const fn = fmtCr(fNet), dn = fmtCr(dNet);
     html += `<tr>
       <td>${r.date}</td>
-      <td style="color:var(--green)">₹${r.fiiBuy.toFixed(0)}</td>
-      <td style="color:var(--red)">₹${r.fiiSell.toFixed(0)}</td>
+      <td style="color:var(--green)">₹${Math.round(r.fiiBuy).toLocaleString("en-IN")}</td>
+      <td style="color:var(--red)">₹${Math.round(r.fiiSell).toLocaleString("en-IN")}</td>
       <td class="${fNet >= 0 ? "fiidii-net-pos" : "fiidii-net-neg"}">${fn.str}</td>
-      <td style="color:var(--green)">₹${r.diiBuy.toFixed(0)}</td>
-      <td style="color:var(--red)">₹${r.diiSell.toFixed(0)}</td>
+      <td style="color:var(--green)">₹${Math.round(r.diiBuy).toLocaleString("en-IN")}</td>
+      <td style="color:var(--red)">₹${Math.round(r.diiSell).toLocaleString("en-IN")}</td>
       <td class="${dNet >= 0 ? "fiidii-net-pos" : "fiidii-net-neg"}">${dn.str}</td>
     </tr>`;
   }
@@ -2677,50 +3081,50 @@ function updateFIISummary(suffix, rows) {
 
 async function loadFIIDII() {
   try {
-    // Fetch via Worker (handles NSE session/CORS)
-    const data = await wFetch("/nse/fiidii", async () => {
-      // Direct fallback via proxy
-      const r = await fetch(proxy + encodeURIComponent("https://www.nseindia.com/api/fiidiiTradeReact"));
-      return await r.json();
-    });
+    // NSE returns one row per category per day: {buyValue, sellValue, netValue, category, date}
+    const data = await nseAPI("/api/fiidiiTradeReact");
+    if (!Array.isArray(data) || !data.length) throw new Error("empty");
 
-    const rows = (Array.isArray(data) ? data : []).slice(0, 15).map(item => ({
-      date:    item.date || item.trading_date || "—",
-      fiiBuy:  parseFloat(item.fii_buy_value  || item.fiiBuyValue  || 0),
-      fiiSell: parseFloat(item.fii_sell_value || item.fiiSellValue || 0),
-      diiBuy:  parseFloat(item.dii_buy_value  || item.diiBuyValue  || 0),
-      diiSell: parseFloat(item.dii_sell_value || item.diiSellValue || 0),
-    })).filter(r => r.fiiBuy > 0 || r.fiiSell > 0);
+    const byDate = new Map();
+    for (const item of data) {
+      const date = item.date || item.trading_date;
+      if (!date) continue;
+      const cat = String(item.category || "").toUpperCase();
+      if (!byDate.has(date)) byDate.set(date, { date, fiiBuy:0, fiiSell:0, diiBuy:0, diiSell:0 });
+      const rec = byDate.get(date);
+      const buy = parseFloat(item.buyValue || 0);
+      const sell = parseFloat(item.sellValue || 0);
+      if (cat.includes("FII") || cat.includes("FPI")) { rec.fiiBuy += buy; rec.fiiSell += sell; }
+      else if (cat.includes("DII")) { rec.diiBuy += buy; rec.diiSell += sell; }
+    }
 
+    const rows = [...byDate.values()]
+      .filter(r => r.fiiBuy > 0 || r.fiiSell > 0 || r.diiBuy > 0 || r.diiSell > 0)
+      .sort((a,b) => new Date(b.date) - new Date(a.date));
     if (!rows.length) throw new Error("empty");
 
-    // Row 0 = most recent trading day (yesterday or today after close)
-    const prevDayRows = rows.slice(0, 1);
-    const weekRows    = rows.slice(0, 5);
-    const prevRows    = rows.slice(5, 10);
+    const dayRows  = rows.slice(0, 1);
+    const weekRows = rows.slice(0, 5);
+    const prevRows = rows.slice(5, 10);
 
-    renderFIITable("fiiBodyToday",    prevDayRows);
+    renderFIITable("fiiBodyToday",    dayRows);
     renderFIITable("fiiBodyWeek",     weekRows);
     renderFIITable("fiiBodyPrevWeek", prevRows);
-    updateFIISummary("Today",    prevDayRows);
+    updateFIISummary("Today",    dayRows);
     updateFIISummary("Week",     weekRows);
     updateFIISummary("PrevWeek", prevRows);
 
-    // Label as previous day with timestamp
     const note = document.getElementById("fii-tab-today");
     if (note) {
       const existing = note.querySelector(".fii-source-note");
-      if (!existing) {
-        const div = document.createElement("div");
-        div.className = "fii-source-note";
-        div.style.cssText = "margin-top:8px;font-size:0.68rem;color:var(--muted);padding:5px 8px;background:var(--surface2);border-radius:6px";
-        div.innerHTML = `ℹ NSE publishes FII/DII data after market close (~6–7 PM IST). Showing most recent available day: <strong style="color:var(--text)">${prevDayRows[0]?.date || "—"}</strong>`;
-        note.appendChild(div);
-      }
+      if (existing) existing.remove();
+      const div = document.createElement("div");
+      div.className = "fii-source-note";
+      div.style.cssText = "margin-top:8px;font-size:0.68rem;color:var(--muted);padding:5px 8px;background:var(--surface2);border-radius:6px";
+      div.innerHTML = `ℹ NSE publishes FII/DII after market close (~6–7 PM IST). Latest available: <strong style="color:var(--text)">${dayRows[0]?.date || "—"}</strong>. The public NSE feed usually returns only the latest session, so weekly tabs may repeat it.`;
+      note.appendChild(div);
     }
-
   } catch {
-    // Clean fallback — show message, no fake data
     const msg = `<tr><td colspan="7" style="padding:16px;text-align:center">
       <div style="color:var(--muted2);font-size:0.78rem">NSE FII/DII data unavailable</div>
       <div style="margin-top:6px;font-size:0.68rem;color:var(--muted)">
@@ -2765,21 +3169,9 @@ function pctToHeatColor(pct) {
 async function loadSectorHeatmap() {
   let html = "";
   try {
-    // Worker returns all indices including sectors in one call
-    const d = await wFetch("/nse/indices", async () => {
-      // Yahoo fallback — sequential per sector
-      const results = [];
-      for (const s of sectors) {
-        try {
-          const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/" + s.symbol));
-          const j = await r.json(); const m = j.chart.result[0].meta;
-          results.push({ name: s.name, pct: ((m.regularMarketPrice - m.previousClose)/m.previousClose*100), price: m.regularMarketPrice });
-        } catch { results.push({ name: s.name, pct: 0, price: 0 }); }
-      }
-      return { indices: results.map(r => ({ index: r.name, last: r.price, percentChange: r.pct })) };
-    });
+    const rows = await getAllIndices();
 
-    // Map NSE sector names to our display names
+    // NSE index name → display label
     const sectorMap = {
       "NIFTY BANK": "Banking", "NIFTY IT": "IT", "NIFTY PHARMA": "Pharma",
       "NIFTY AUTO": "Auto", "NIFTY FMCG": "FMCG", "NIFTY METAL": "Metal",
@@ -2788,9 +3180,9 @@ async function loadSectorHeatmap() {
     };
 
     for (const [nseName, displayName] of Object.entries(sectorMap)) {
-      const idx = d.indices?.find(i => i.name === nseName || i.index === nseName);
+      const idx = findIndex(rows, nseName);
       if (!idx) continue;
-      const pct = parseFloat(idx.pChange || idx.percentChange || 0);
+      const pct = parseFloat(idx.percentChange || 0);
       const price = parseFloat(idx.last || 0);
       const { bg, border } = pctToHeatColor(pct);
       const sign = pct >= 0 ? "+" : "";
@@ -2825,56 +3217,26 @@ const SIGNAL_CONTEXT = {
 // Observation window message
 const OBS_WINDOW_END = "10:30";
 
+// Expiry selection lives in getTargetExpiry() near the top of this script
+// (holiday-aware Tuesday / last-Tuesday logic, trading-day DTE).
 let signalLog = [];
 let notificationsEnabled = false;
-let lastSignalTime = null;
+let lastSignalTime = (() => { try { return localStorage.getItem("marketDashboard.lastSignalSlot") || null; } catch { return null; } })();
 let signalCheckInterval = null;
-
-// Smart expiry selector:
-// - On expiry day (Tuesday) → use NEXT Tuesday
-// - Any other day → use nearest upcoming Tuesday
-// - If Tuesday but before market open → still use next Tuesday (today's expiry)
-function getTargetExpiry() {
-  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-  const day  = now.getDay(); // 0=Sun,1=Mon,2=Tue,3=Wed,4=Thu,5=Fri,6=Sat
-  const mins = now.getHours() * 60 + now.getMinutes();
-  const isExpiryDay = day === 2; // Tuesday
-  const marketClosed = mins >= 930; // after 3:30 PM
-
-  let daysToAdd;
-  if (isExpiryDay) {
-    // On Tuesday: always suggest NEXT week's expiry (7 days ahead)
-    // because today's expiry has heavy theta decay — risky for buyers
-    daysToAdd = 7;
-  } else if (day < 2) {
-    // Sun(0) or Mon(1): this Tuesday
-    daysToAdd = 2 - day;
-  } else {
-    // Wed(3)–Sat(6): next Tuesday
-    daysToAdd = 9 - day;
-  }
-
-  const expiry = new Date(now);
-  expiry.setDate(now.getDate() + daysToAdd);
-
-  const daysToExpiry = daysToAdd;
-  const dateStr = expiry.toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
-
-  return { dateStr, daysToExpiry, isExpiryDay };
-}
 
 function getATM(spot) {
   return Math.round(spot / 50) * 50;
 }
 
-// Market phase based on IST time
+// Market phase based on IST time and the NSE trading calendar
 function getMarketPhase() {
-  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-  const m = now.getHours() * 60 + now.getMinutes();
+  const s = getMarketSession();
+  if (!s.isTradingDay) return "closed";
+  const m = s.mins;
   if (m < 555)  return "pre";         // before 9:15
   if (m < 630)  return "observation"; // 9:15–10:30 — watch & understand
   if (m <= 870) return "active";      // 10:30–14:30 — signal window
-  if (m < 930)  return "caution";     // 14:30–15:30 — no new entries
+  if (m < s.foClose) return "caution"; // 14:30–F&O close — no new entries
   return "closed";
 }
 
@@ -2888,17 +3250,31 @@ function getNextSignalTime() {
     return `10:30 IST — 1st Signal (observation window: ${minLeft}m remaining)`;
   }
   if (phase === "caution") return "No more signals today — avoid new entries after 14:30";
-  if (phase === "closed")  return "10:30 IST tomorrow";
+  if (phase === "closed")  return "Next trading day — 10:30 IST";
   for (const t of SIGNAL_TIMES) {
     if (t > hhmm) return `${t} IST — ${SIGNAL_CONTEXT[t]?.label || ""}`;
   }
   return "10:30 IST tomorrow";
 }
 
-function isSignalTime() {
+// A signal slot stays valid for 2 minutes so a page loaded at :30:40 still fires.
+function currentSignalSlot() {
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
-  const hhmm = now.getHours().toString().padStart(2,"0") + ":" + now.getMinutes().toString().padStart(2,"0");
-  return SIGNAL_TIMES.includes(hhmm) && hhmm !== lastSignalTime;
+  const mins = now.getHours() * 60 + now.getMinutes();
+  for (const t of SIGNAL_TIMES) {
+    const [h, m] = t.split(":").map(Number);
+    const sm = h * 60 + m;
+    if (mins >= sm && mins <= sm + 2) return `${todayIST()}|${t}`;
+  }
+  return null;
+}
+
+function isSignalTime() {
+  const s = getMarketSession();
+  if (!s.isTradingDay) return false;
+  if (s.mins < 555 || s.mins > s.foClose) return false;
+  const slot = currentSignalSlot();
+  return !!slot && slot !== lastSignalTime;
 }
 
 /* ─── MARKET REGIME CLASSIFIER ─── */
@@ -3028,8 +3404,7 @@ async function computeSRLevels(spot) {
 
   // 3. Recent swing highs/lows from 1-month daily data
   try {
-    const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=1mo&interval=1d"));
-    const d = await r.json();
+    const d = await yahooChart("^NSEI", "1mo", "1d");
     const q  = d.chart.result[0].indicators.quote[0];
     const highs = q.high.filter(v => v != null);
     const lows  = q.low.filter(v => v != null);
@@ -3223,12 +3598,11 @@ function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, brea
   else if (volLabel && volLabel !== "N/A") { reasons.push(`Volume ${volLabel}`); }
   else                      { reasons.push(`Volume data unavailable`); }
 
-  // ── FACTOR 6: PCR NOTE (labeled honestly) ────────────────────────────
-  // PCR is VIX-derived proxy — treated as WEAK signal, max ±1 pt
-  // Clearly labeled so user knows it's an approximation
-  const pcrNote = "(⚠ VIX-proxy, not real OI)";
-  if (pcr >= 1.2)      { score += 1; reasons.push(`PCR ~${pcr.toFixed(2)} ${pcrNote} — high put activity proxy`); }
-  else if (pcr <= 0.8) { score -= 1; reasons.push(`PCR ~${pcr.toFixed(2)} ${pcrNote} — high call activity proxy`); }
+  // ── FACTOR 6: PCR NOTE ────────────────────────────────────────────────
+  // PCR comes from NSE option-chain OI (VIX proxy only if that fetch fails)
+  const pcrNote = "(NSE OI)";
+  if (pcr >= 1.2)      { score += 1; reasons.push(`PCR ~${pcr.toFixed(2)} ${pcrNote} — high put activity`); }
+  else if (pcr <= 0.8) { score -= 1; reasons.push(`PCR ~${pcr.toFixed(2)} ${pcrNote} — high call activity`); }
   else                 { reasons.push(`PCR ~${pcr.toFixed(2)} ${pcrNote} — neutral`); }
 
   // ── SMR REMOVED as separate factor ───────────────────────────────────
@@ -3352,7 +3726,7 @@ function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, brea
       : "";
     strikeName = [
       `${primaryStrike} ${type} · ${primaryLabel}`,
-      `${expiry.isExpiryDay ? "⚡ Expiry Day → " : ""}Expiry: ${expiry.dateStr} · ${dte}d away`,
+      `${expiry.isExpiryDay ? "⚡ Expiry Day → Next " : ""}${expiry.isMonthly ? "Monthly" : "Weekly"} Expiry: ${expiry.dateStr} · ${dte} trading day${dte === 1 ? "" : "s"} away`,
       dteNote,
       otmRationale,
       secLine.trim()
@@ -3505,19 +3879,19 @@ function renderProbabilityScore(prob) {
   ).join("");
 }
 
-function renderSignal(sig, inputs) {
+function renderSignal(sig, inputs, logEvent = true) {
   const card = document.getElementById("sigCard");
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
   const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
 
   // Probability score
-  const prob = computeProbabilityScore(sig, { ...inputs, dte: sig.expiry?.daysToExpiry || 5 });
+  const prob = computeProbabilityScore(sig, { ...inputs, dte: sig.expiry?.daysToExpiry ?? 5 });
   renderProbabilityScore(prob);
   sig.prob = prob;
 
   // Entry price via Black-Scholes (shown first as fast estimate)
   if (sig.type && sig.primaryStrike) {
-    const ep = calcOptionEntry(inputs.spot, sig.primaryStrike, sig.type, sig.expiry?.daysToExpiry || 5, inputs.vix);
+    const ep = calcOptionEntry(inputs.spot, sig.primaryStrike, sig.type, sig.expiry?.daysToExpiry ?? 5, inputs.vix);
     document.getElementById("sigEntryPrice").textContent  = `₹${ep.entryMid} (BS est.)`;
     document.getElementById("sigEntryRange").textContent  = `Range: ₹${ep.entryLow} – ₹${ep.entryHigh}`;
     document.getElementById("sigExitPrice").textContent   = `₹${ep.slPrice}`;
@@ -3530,7 +3904,7 @@ function renderSignal(sig, inputs) {
     document.getElementById("sigT1").style.color = "#84cc16";
     document.getElementById("sigT2").style.color = "#22c55e";
     document.getElementById("sigT3").style.color = "#22c55e";
-    document.getElementById("sigSL").textContent = `🛑 SL: Exit at ₹${ep.slPrice} · Entry ~₹${ep.entryMid} · Max loss ~₹${Math.round((ep.entryMid - ep.slPrice) * 25)} per lot`;
+    document.getElementById("sigSL").textContent = `🛑 SL: Exit at ₹${ep.slPrice} · Entry ~₹${ep.entryMid} · Max loss ~₹${Math.round((ep.entryMid - ep.slPrice) * NIFTY_LOT_SIZE)} per lot`;
     sig.entryMid = ep.entryMid;
 
     // Then fetch real NSE price and override BS estimate
@@ -3581,7 +3955,7 @@ function renderSignal(sig, inputs) {
   // SMR label clarification
   reasonHTML += `<div style='margin-top:6px;font-size:0.65rem;color:var(--muted);border-top:1px solid var(--border);padding-top:5px'>
     ℹ SMR shown as UI indicator only (not scored) — it mirrors PCR and would duplicate sentiment weighting.<br>
-    ℹ PCR marked as VIX-proxy (⚠) — not real NSE OI. Treat as weak signal only.
+    ℹ PCR is now read from the NSE option chain for the selected expiry (PE OI / CE OI).
   </div>`;
   document.getElementById("sigReason").innerHTML = reasonHTML;
 
@@ -3596,16 +3970,17 @@ function renderSignal(sig, inputs) {
   document.getElementById("si-vix").style.color     = inputs.vix >= 22 ? "#ef4444" : inputs.vix >= 18 ? "#f59e0b" : "#22c55e";
   document.getElementById("si-vixpct").textContent  = (inputs.vixPercentile||50) + "th percentile";
   document.getElementById("si-vixpct").style.color  = (inputs.vixPercentile||50) >= 75 ? "#ef4444" : (inputs.vixPercentile||50) <= 25 ? "#22c55e" : "#f59e0b";
-  document.getElementById("si-pcr").innerHTML       = `${inputs.pcr.toFixed(2)} <small style="color:var(--muted)">(VIX proxy ⚠)</small>`;
+  document.getElementById("si-pcr").innerHTML       = `${inputs.pcr.toFixed(2)} <small style="color:var(--muted)">(NSE OI)</small>`;
   document.getElementById("si-ad").textContent      = inputs.adRatio;
   document.getElementById("si-breadth").textContent = inputs.breadthPct + "% bullish";
   document.getElementById("si-breadth").style.color = inputs.breadthPct >= 60 ? "#22c55e" : inputs.breadthPct <= 40 ? "#ef4444" : "#f59e0b";
   document.getElementById("si-atm").textContent     = sig.atm + " (ATM)";
   document.getElementById("si-time").textContent    = timeStr;
 
-  // Log it
-  if (sig.direction !== "SIDEWAYS") {
+  // Log it only when this is a real scheduled signal (not on page-load render)
+  if (logEvent && sig.direction !== "SIDEWAYS") {
     addSignalLog(timeStr, sig, inputs);
+    tlogAddEntry(sig, inputs, prob).catch(e => console.warn("Trading log write failed:", e));
     if (notificationsEnabled) fireNotification(sig, timeStr, prob);
     playSignalSound(sig.type);
   }
@@ -3627,23 +4002,11 @@ async function computeVolumeConfirmation(direction) {
   if (cachedVolDate === today && cachedVolData) return cachedVolData;
 
   try {
-    // Fetch 30 days of Nifty daily data to get volume history
-    const r = await wFetch("/nse/vixhistory", async () => {
-      const url = "https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=1mo&interval=1d";
-      const res = await fetch(proxy + encodeURIComponent(url));
-      return await res.json();
-    });
-
-    // If Worker returns VIX data use Yahoo directly for Nifty volume
-    let volumes = [], todayVol = 0;
-    try {
-      const url = "https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=1mo&interval=1d";
-      const res = await fetch(proxy + encodeURIComponent(url));
-      const d   = await res.json();
-      const q   = d.chart.result[0].indicators.quote[0];
-      volumes   = (q.volume || []).filter(v => v != null && v > 0);
-      todayVol  = volumes[volumes.length - 1] || 0;
-    } catch {}
+    // Fetch 1 month of Nifty daily data (volume history)
+    const d = await yahooChart("^NSEI", "1mo", "1d");
+    const q = d.chart.result[0].indicators.quote[0];
+    const volumes  = (q.volume || []).filter(v => v != null && v > 0);
+    const todayVol = volumes[volumes.length - 1] || 0;
 
     if (!volumes.length) throw new Error("no volume data");
 
@@ -3692,43 +4055,54 @@ async function computeVolumeConfirmation(direction) {
   }
 }
 
-/* ─── TRADING LOG — GitHub Persistent ─── */
+/* ─── TRADING LOG — local save + optional GitHub sync ─── */
 const TLOG_FILE = "trading_log.json";
 const TLOG_API  = `https://api.github.com/repos/${GH_USER}/${GH_REPO}/contents/${TLOG_FILE}`;
+const TLOG_LS_KEY = "marketDashboard.tradingLog";
+
+function tlogLocalRead() {
+  try { const raw = localStorage.getItem(TLOG_LS_KEY); return raw ? JSON.parse(raw) : null; } catch { return null; }
+}
+function tlogLocalWrite(entries) {
+  try { localStorage.setItem(TLOG_LS_KEY, JSON.stringify({ entries })); return true; } catch { return false; }
+}
 
 async function tlogRead() {
-  try {
-    const r = await fetch(TLOG_API, {
-      headers: { Authorization: `token ${GH_TOKEN}`, Accept: "application/vnd.github.v3+json" }
-    });
-    if (!r.ok) return { entries: [], sha: null };
-    const meta    = await r.json();
-    const content = JSON.parse(atob(meta.content.replace(/\n/g,"")));
-    return { entries: content.entries || [], sha: meta.sha };
-  } catch { return { entries: [], sha: null }; }
+  if (getGHToken()) {
+    try {
+      const r = await fetch(TLOG_API, { headers: ghHeaders() });
+      if (r.ok) {
+        const meta = await r.json();
+        const content = JSON.parse(b64Decode(meta.content.replace(/\n/g,"")));
+        return { entries: content.entries || [], sha: meta.sha, source: "github" };
+      }
+    } catch {}
+  }
+  const local = tlogLocalRead();
+  return { entries: local?.entries || [], sha: null, source: local ? "local" : "none" };
 }
 
 async function tlogWrite(entries, sha) {
+  tlogLocalWrite(entries); // always persist locally
+  const el = document.getElementById("tlogStorageStatus");
+  if (!getGHToken()) {
+    if (el) { el.textContent = "✓ Saved locally (GitHub sync off)"; el.style.color = "#22c55e"; }
+    return;
+  }
   const body = {
     message: `Trade log update ${new Date().toISOString().slice(0,10)}`,
-    content: btoa(JSON.stringify({ entries }, null, 2)),
+    content: b64Encode(JSON.stringify({ entries }, null, 2)),
     ...(sha ? { sha } : {})
   };
   try {
-    await fetch(TLOG_API, {
-      method: "PUT",
-      headers: {
-        Authorization: `token ${GH_TOKEN}`,
-        Accept: "application/vnd.github.v3+json",
-        "Content-Type": "application/json"
-      },
-      body: JSON.stringify(body)
-    });
-    const el = document.getElementById("tlogStorageStatus");
+    const r = await fetch(TLOG_API, { method: "PUT", headers: ghHeaders({ "Content-Type": "application/json" }), body: JSON.stringify(body) });
+    if (!r.ok) throw new Error("HTTP " + r.status);
+    // GitHub rotates the blob SHA on every commit — keep ours current for the next write.
+    const out = await r.json().catch(() => null);
+    if (out?.content?.sha) tlogSHA = out.content.sha;
     if (el) { el.textContent = "✓ Saved to GitHub"; el.style.color = "#22c55e"; }
   } catch {
-    const el = document.getElementById("tlogStorageStatus");
-    if (el) { el.textContent = "⚠ Save failed"; el.style.color = "#ef4444"; }
+    if (el) { el.textContent = "⚠ GitHub failed — saved locally"; el.style.color = "#f59e0b"; }
   }
 }
 
@@ -3738,12 +4112,14 @@ let tlogSHA     = null;
 async function tlogLoad() {
   const el = document.getElementById("tlogStorageStatus");
   if (el) { el.textContent = "⟳ Loading log..."; el.style.color = "#f59e0b"; }
-  const { entries, sha } = await tlogRead();
+  const { entries, sha, source } = await tlogRead();
   tlogEntries = entries;
   tlogSHA     = sha;
   renderTlog();
   if (el) {
-    el.textContent = entries.length ? `✓ ${entries.length} entries loaded` : "No entries yet";
+    el.textContent = entries.length
+      ? `✓ ${entries.length} entries (${source === "github" ? "GitHub" : "local"})`
+      : "No entries yet";
     el.style.color = "#22c55e";
   }
 }
@@ -3833,6 +4209,14 @@ async function tlogAddEntry(sig, inputs, prob) {
   // Get volume data
   const vol = await computeVolumeConfirmation(sig.type);
 
+  // Prefer the live NSE mid-price for the record; fall back to the BS estimate.
+  let entryPrice = sig.entryMid || null;
+  let entrySource = sig.entryLive ? "NSE" : "BS estimate";
+  try {
+    const live = await fetchRealOptionPrice(sig.primaryStrike, sig.type);
+    if (live?.midPrice) { entryPrice = live.midPrice; entrySource = "NSE"; }
+  } catch {}
+
   const entry = {
     id:         Date.now(),
     date, time,
@@ -3840,9 +4224,10 @@ async function tlogAddEntry(sig, inputs, prob) {
     score:      prob?.score ?? null,
     confidence: sig.confidence,
     strike:     sig.primaryStrike ? `${sig.primaryStrike} ${sig.type}` : `${sig.atm} ${sig.type || ""}`,
-    entryPrice: sig.entryMid || null,
+    entryPrice,
+    entrySource,
     exitPrice:  null,
-    outcome:    "PENDING",
+    outcome:    sig.direction === "SKIP" ? "SKIP" : "PENDING",
     volRatio:   vol.volRatio,
     volLabel:   vol.volLabel,
     volClass:   vol.volClass,
@@ -3889,9 +4274,11 @@ async function tlogDelete(id) {
 }
 
 async function tlogSaveAll() {
-  const { sha } = await tlogRead(); // get fresh SHA before writing
-  tlogSHA = sha;
-  await tlogWrite(tlogEntries, tlogSHA);
+  return ghEnqueue(async () => {
+    const { sha } = await tlogRead(); // fresh SHA immediately before each write
+    tlogSHA = sha;
+    await tlogWrite(tlogEntries, tlogSHA);
+  });
 }
 
 function tlogExportCSV() {
@@ -3977,60 +4364,67 @@ async function toggleNotifications() {
 }
 
 // Main signal runner — gathers all live data and computes signal
-async function runSignalEngine(force = false) {
+// logEvent=false on page load (render only); true for scheduled signal minutes.
+async function runSignalEngine(force = false, logEvent = false) {
   if (!force && !isSignalTime()) return;
 
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
   const hhmm = now.getHours().toString().padStart(2,"0") + ":" + now.getMinutes().toString().padStart(2,"0");
-  lastSignalTime = hhmm;
+  if (logEvent) {
+    lastSignalTime = currentSignalSlot() || `${todayIST()}|${hhmm}`;
+    try { localStorage.setItem("marketDashboard.lastSignalSlot", lastSignalTime); } catch {}
+  }
 
-  // Gather inputs from already-loaded data on page
+  // Gather inputs — prefer exact NSE values, fall back to on-page values
   try {
-    const spotText  = document.getElementById("price")?.textContent?.replace("₹","").replace(",","");
-    const spot      = parseFloat(spotText) || 0;
+    let spot = 0, vix = 15, prevClose = 0, dayOpen = 0;
+    try {
+      const rows = await getAllIndices();
+      const nRow = findIndex(rows, "NIFTY 50");
+      const vRow = findIndex(rows, "INDIA VIX");
+      if (nRow) {
+        spot      = parseFloat(nRow.last) || 0;
+        prevClose = parseFloat(nRow.previousClose) || spot;
+        dayOpen   = parseFloat(nRow.open) || spot;
+      }
+      if (vRow) vix = parseFloat(vRow.last) || vix;
+    } catch {}
+
+    if (!(spot > 0)) {
+      const spotText = document.getElementById("price")?.textContent?.replace("₹","").replace(",","");
+      spot = parseFloat(spotText) || 0;
+    }
+    if (!(prevClose > 0)) prevClose = spot;
+    if (!(dayOpen > 0)) dayOpen = spot;
+    if (!(vix > 0)) vix = parseFloat(document.getElementById("idx-vix")?.textContent) || 15;
+    if (!(spot > 0)) throw new Error("no spot price yet");
+
     const pcrText   = document.getElementById("pcrValue")?.textContent;
     const pcr       = parseFloat(pcrText) || 1.0;
-    const vixText   = document.getElementById("idx-vix")?.textContent;
-    const vix       = parseFloat(vixText) || 15;
     const adRatioTx = document.getElementById("adRatio")?.textContent || "1.0";
     const adRatio   = parseFloat(adRatioTx) || 1.0;
     const breadthTx = document.getElementById("adBreadth")?.textContent || "50%";
     const breadthPct= parseInt(breadthTx) || 50;
 
-    // Get prevClose via fresh fetch
-    let prevClose = spot;
-    let vix52wHigh = vix * 1.5, vix52wLow = vix * 0.6; // fallback estimates
-    try {
-      const r = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/%5ENSEI?range=1d&interval=1m"));
-      const d = await r.json();
-      prevClose = d.chart.result[0].meta.previousClose || spot;
-    } catch {}
+    // Opening gap = today's open vs previous close (separate from intraday move)
+    const gapPct = prevClose > 0 ? ((dayOpen - prevClose) / prevClose * 100) : 0;
 
-    // Compute gap (open vs prev close)
-    // Use day's first available price vs prevClose as gap proxy
-    const gapPct = prevClose > 0 ? ((spot - prevClose) / prevClose * 100) : 0;
-    // At 10:30+ the intraday move includes gap — subtract to isolate gap
-    // Best approximation: use dayChgPct at open (prevClose → first candle open)
-    // We use spot vs prevClose as combined gap+move (acceptable proxy)
-
-    // VIX 52-week percentile — fetch VIX 1y data to compute
-    let vixPercentile = 50; // neutral default
-    let ivRank = 50;        // IVR default
+    // VIX 52-week percentile / IV rank from 1y daily closes
+    let vixPercentile = 50;
+    let ivRank = 50;
     try {
-      const rv = await fetch(proxy + encodeURIComponent("https://query1.finance.yahoo.com/v8/finance/chart/INDIAVIX.NS?range=1y&interval=1d"));
-      const dv = await rv.json();
-      const vixCloses = dv.chart.result[0].indicators.quote[0].close.filter(v => v != null);
+      const dv = await yahooChart("^INDIAVIX", "1y", "1d");
+      const vixCloses = (dv.chart.result[0].indicators.quote[0].close || []).filter(v => v != null);
       if (vixCloses.length > 20) {
-        vix52wHigh = Math.max(...vixCloses);
-        vix52wLow  = Math.min(...vixCloses);
-        // IV Rank = (current - 52w low) / (52w high - 52w low) × 100
-        ivRank = Math.round((vix - vix52wLow) / (vix52wHigh - vix52wLow) * 100);
+        const hi = Math.max(...vixCloses), lo = Math.min(...vixCloses);
+        ivRank = hi > lo ? Math.round((vix - lo) / (hi - lo) * 100) : 50;
         ivRank = Math.min(100, Math.max(0, ivRank));
-        // VIX percentile = % of days VIX was below current
         vixPercentile = Math.round(vixCloses.filter(v => v < vix).length / vixCloses.length * 100);
-        // Update UI
-        document.getElementById("si-smr").textContent = `IVR ${ivRank}%`;
-        document.getElementById("si-smr").style.color = ivRank <= 40 ? "#22c55e" : ivRank <= 60 ? "#f59e0b" : "#ef4444";
+        const siSmr = document.getElementById("si-smr");
+        if (siSmr) {
+          siSmr.textContent = `IVR ${ivRank}%`;
+          siSmr.style.color = ivRank <= 40 ? "#22c55e" : ivRank <= 60 ? "#f59e0b" : "#ef4444";
+        }
       }
     } catch {}
 
@@ -4057,7 +4451,7 @@ async function runSignalEngine(force = false) {
 
     const inputs = { spot, prevClose, dayChg, dayChgPct, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty: srCtx.srScorePenalty, volScore: volData.volScore, volLabel: volData.volLabel };
     const sig = computeSignal(inputs);
-    renderSignal(sig, inputs);
+    renderSignal(sig, inputs, logEvent);
 
   } catch(e) { console.error("Signal engine error:", e); }
 }
@@ -4065,13 +4459,16 @@ async function runSignalEngine(force = false) {
 // Init signal panel
 function initSignalEngine() {
   const expiry = getTargetExpiry();
+  const kind   = expiry.isMonthly ? "Monthly" : "Weekly";
   const label  = expiry.isExpiryDay
-    ? `⚡ Expiry Day → Next Week: ${expiry.dateStr}`
-    : `Weekly Expiry: ${expiry.dateStr} (${expiry.daysToExpiry}d)`;
+    ? `⚡ Expiry Day → Next ${kind}: ${expiry.dateStr} (${expiry.daysToExpiry} trading days)`
+    : `${kind} Expiry: ${expiry.dateStr} (${expiry.daysToExpiry} trading days)`;
   document.getElementById("sigExpiryLabel").textContent = label;
   document.getElementById("sigNextTime").textContent = getNextSignalTime();
-  signalCheckInterval = setInterval(runSignalEngine, 60000);
-  setTimeout(() => runSignalEngine(true), 5000);
+  signalCheckInterval = setInterval(() => runSignalEngine(false, true), 60000);
+  // Render immediately (no logging) and refresh once after the other feeds settle
+  runSignalEngine(true, false);
+  setTimeout(() => runSignalEngine(true, false), 12000);
 }
 
 /* ─── DATA MODE MANAGER ─── */
@@ -4307,13 +4704,35 @@ async function loadKVSnapshot() {
   }
 }
 
-/* ─── REAL OPTION PRICE FETCHER ─── */
-// Replaces Black-Scholes with actual NSE bid/ask from Worker
+/* ─── REAL OPTION PRICE — NSE option chain (option-chain-v3) ─── */
 async function fetchRealOptionPrice(strike, type) {
   try {
-    const data = await wFetch(`/option/price?strike=${strike}&type=${type}`, null);
-    if (!data || data.error) return null;
-    return data;
+    const expiry = getTargetExpiry();
+    const rows = await getOptionChain(expiry.apiDate);
+    const row = rows.find(r => Math.abs(parseFloat(r.strikePrice) - strike) < 0.01);
+    if (!row) return null;
+    const leg = row[type];
+    if (!leg) return null;
+
+    const bid  = parseFloat(leg.buyPrice1 || 0);
+    const ask  = parseFloat(leg.sellPrice1 || 0);
+    const last = parseFloat(leg.lastPrice || 0);
+    let mid = (bid > 0 && ask > 0) ? (bid + ask) / 2 : last;
+    if (!(mid > 0)) return null;
+    mid = Math.round(mid * 20) / 20; // NSE tick = 0.05
+
+    return {
+      midPrice: mid,
+      bid, ask,
+      iv: parseFloat(leg.impliedVolatility || 0),
+      oi: parseInt(leg.openInterest || 0),
+      slPrice: Math.max(0.05, Math.round(mid * 0.70 * 20) / 20),
+      t1Price: Math.round(mid * 1.5 * 20) / 20,
+      t2Price: Math.round(mid * 2.0 * 20) / 20,
+      t3Price: Math.round(mid * 2.8 * 20) / 20,
+      expiry: expiry.apiDate,
+      source: "NSE option chain"
+    };
   } catch { return null; }
 }
 
@@ -4337,7 +4756,7 @@ async function updateEntryPriceFromNSE(sig, inputs) {
     document.getElementById("sigT1").style.color = "#84cc16";
     document.getElementById("sigT2").style.color = "#22c55e";
     document.getElementById("sigT3").style.color = "#22c55e";
-    document.getElementById("sigSL").textContent = `🛑 SL: Exit at ₹${ep.slPrice} · Entry ~₹${ep.midPrice} (Live NSE) · Max loss ~₹${Math.round((ep.midPrice - ep.slPrice) * 25)} per lot`;
+    document.getElementById("sigSL").textContent = `🛑 SL: Exit at ₹${ep.slPrice} · Entry ~₹${ep.midPrice} (Live NSE) · Max loss ~₹${Math.round((ep.midPrice - ep.slPrice) * NIFTY_LOT_SIZE)} per lot`;
 
     // Update entry note with live data source label
     document.getElementById("sigEntryNote").innerHTML =
@@ -4381,28 +4800,28 @@ updateClock();
 updateRefreshIndicator();
 startCountdown();
 
-// Load KV snapshot first for instant data population
-loadKVSnapshot().then(() => {
-  trackedFetchNifty();
-  trackedLoadIndices();
-  trackedLoadGlobal();
-  trackedLoadGiftPanel();
-  trackedLoadCommodities();
-  trackedLoadTicker();
+// Load KV snapshot in the background (does not block the dashboard)
+loadKVSnapshot();
 
-  // PCR: init chart → load GitHub history → then fetch live PCR
-  // Order matters: chart must exist before history is loaded into it
-  initPCRChart();
-  ghLoadPCRHistory().then(() => trackedLoadPCR());
+trackedFetchNifty();
+trackedLoadIndices();
+trackedLoadGlobal();
+trackedLoadGiftPanel();
+trackedLoadCommodities();
+trackedLoadTicker();
 
-  trackedLoadAdvDecline();
-  trackedLoad52Week();
-  trackedLoadAnnouncements();
-  trackedLoadFIIDII();
-  trackedLoadSectorHeatmap();
-  initSignalEngine();
-  tlogLoad();
-});
+// PCR: init chart → load saved history → then fetch live PCR
+initPCRChart();
+ghLoadPCRHistory().then(() => trackedLoadPCR());
+
+trackedLoadAdvDecline();
+trackedLoad52Week();
+trackedLoadAnnouncements();
+trackedLoadFIIDII();
+trackedLoadSectorHeatmap();
+loadNiftyChart("1d");
+initSignalEngine();
+tlogLoad();
 
 fetchRSS("https://timesofindia.indiatimes.com/rssfeeds/1898055.cms", "toi");
 fetchRSS("https://www.livemint.com/rss/markets", "livemint");

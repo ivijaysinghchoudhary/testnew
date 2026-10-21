@@ -918,6 +918,129 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
 }
 .prob-guide span { padding: 1px 6px; border-radius: 4px; }
 
+/* Grade policy legend */
+.grade-policy {
+  margin-top: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  background: rgba(59,130,246,0.07);
+  border: 1px solid rgba(59,130,246,0.18);
+  font-size: 0.6rem;
+  line-height: 1.5;
+  color: var(--muted2);
+}
+.grade-policy strong { color: var(--text); }
+
+/* Wait-only state */
+.sig-wait-banner {
+  margin-bottom: 10px;
+  padding: 8px 11px;
+  border-radius: 7px;
+  background: rgba(245,158,11,0.12);
+  border: 1px solid rgba(245,158,11,0.35);
+  color: #f59e0b;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1.5;
+}
+.signal-card.wait { background: rgba(245,158,11,0.07); border-color: rgba(245,158,11,0.4); }
+
+/* Editable fill */
+.entry-exec {
+  margin: 0 0 10px;
+  padding: 9px 10px;
+  border-radius: 8px;
+  background: rgba(59,130,246,0.07);
+  border: 1px solid rgba(59,130,246,0.22);
+}
+.entry-exec-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+  font-size: 0.68rem;
+  font-weight: 700;
+  margin-bottom: 6px;
+}
+.entry-exec-hint { color: var(--muted); font-weight: 400; }
+.entry-validity { color: var(--muted2); font-size: 0.62rem; font-weight: 600; }
+.entry-exec-row { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.entry-exec-row input {
+  width: 110px;
+  min-width: 90px;
+  background: var(--surface);
+  border: 1px solid var(--border2);
+  color: var(--text);
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 0.8rem;
+  font-family: 'Inter', sans-serif;
+  font-weight: 700;
+}
+.entry-exec-row input:focus { outline: none; border-color: var(--accent); }
+.entry-btn {
+  background: var(--surface2);
+  border: 1px solid var(--border2);
+  color: var(--muted2);
+  padding: 5px 9px;
+  border-radius: 6px;
+  font-size: 0.68rem;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: 'Inter', sans-serif;
+}
+.entry-btn:hover { border-color: var(--accent); color: var(--accent); }
+.entry-btn-primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.entry-btn-primary:hover { opacity: 0.9; color: #fff; }
+.entry-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.entry-actual-note { margin-top: 6px; font-size: 0.64rem; line-height: 1.5; color: var(--muted2); }
+
+/* Open position */
+.open-pos {
+  margin: 12px 16px 0;
+  padding: 11px 13px;
+  border-radius: 10px;
+  background: rgba(34,197,94,0.07);
+  border: 1px solid rgba(34,197,94,0.28);
+}
+.open-pos.loss { background: rgba(239,68,68,0.07); border-color: rgba(239,68,68,0.28); }
+.open-pos-head { display: flex; justify-content: space-between; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 7px; }
+.open-pos-title { font-size: 0.78rem; font-weight: 800; }
+.open-pos-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 6px; }
+.open-pos-cell { background: var(--surface2); border-radius: 6px; padding: 5px 7px; }
+.open-pos-cell .k { font-size: 0.56rem; color: var(--muted); text-transform: uppercase; letter-spacing: 0.06em; }
+.open-pos-cell .v { font-size: 0.76rem; font-weight: 700; margin-top: 1px; }
+.open-pos-actions { display: flex; gap: 6px; align-items: center; flex-wrap: wrap; }
+.open-pos-actions input {
+  width: 78px; background: var(--surface); border: 1px solid var(--border2); color: var(--text);
+  padding: 4px 6px; border-radius: 5px; font-size: 0.72rem; font-family: 'Inter', sans-serif;
+}
+
+/* Status badges + grade stats */
+.tlog-status {
+  display: inline-block; padding: 2px 7px; border-radius: 4px; font-size: 0.62rem;
+  font-weight: 700; letter-spacing: 0.04em; white-space: nowrap;
+}
+.tlog-status-signal  { background: rgba(59,130,246,0.16); color: #60a5fa; border: 1px solid rgba(59,130,246,0.35); }
+.tlog-status-watch   { background: rgba(245,158,11,0.13); color: #f59e0b; border: 1px solid rgba(245,158,11,0.3); }
+.tlog-status-open    { background: rgba(34,197,94,0.16); color: #22c55e; border: 1px solid rgba(34,197,94,0.35); }
+.tlog-status-closed  { background: rgba(148,163,184,0.12); color: #94a3b8; border: 1px solid rgba(148,163,184,0.25); }
+.tlog-status-expired { background: rgba(239,68,68,0.12); color: #ef4444; border: 1px solid rgba(239,68,68,0.25); }
+.tlog-status-skip    { background: rgba(148,163,184,0.1); color: #64748b; border: 1px solid rgba(148,163,184,0.2); }
+.tlog-take-btn {
+  background: rgba(59,130,246,0.15); border: 1px solid rgba(59,130,246,0.4); color: #60a5fa;
+  padding: 3px 8px; border-radius: 5px; font-size: 0.65rem; font-weight: 700; cursor: pointer;
+  font-family: 'Inter', sans-serif; white-space: nowrap;
+}
+.tlog-take-btn:hover { background: rgba(59,130,246,0.28); }
+.tlog-take-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+.tlog-grade-stats {
+  padding: 8px 16px; border-top: 1px solid var(--border); font-size: 0.68rem;
+  color: var(--muted2); display: flex; gap: 14px; flex-wrap: wrap; background: var(--surface2);
+}
+.tlog-grade-stats .gs { display: inline-flex; gap: 5px; align-items: center; }
+.tlog-grade-stats strong { color: var(--text); }
+
 /* ── TRADING LOG ── */
 .tlog-wrap {
   background: var(--surface);
@@ -1322,7 +1445,9 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
   </div>
 
   <div style="margin-top:10px;font-size:0.7rem;color:var(--muted)">
-    ₹ in Crores &nbsp;|&nbsp; Source: NSE India (provisional figures, equity segment)
+    ₹ in Crores &nbsp;|&nbsp; Latest: <a href="https://www.nseindia.com/reports/fii-dii" target="_blank" style="color:var(--accent)">NSE India</a>
+    &nbsp;·&nbsp; History: <a href="https://economictimes.indiatimes.com/markets/fii-dii-activity/cash-provisional" target="_blank" style="color:var(--accent)">ET Markets</a>
+    (provisional equity cash figures)
   </div>
 </div>
 
@@ -1382,6 +1507,7 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
       <div class="sig-direction" id="sigDirection">⏳ Calculating...</div>
       <div class="sig-subtitle" id="sigSubtitle">Waiting for market data</div>
       <div id="sigConfBadge" class="sig-confidence conf-medium">● MEDIUM</div>
+      <div id="sigWaitBanner" class="sig-wait-banner" style="display:none"></div>
 
       <!-- Setup Quality Score (independent factors, not a win probability) -->
       <div class="prob-score-wrap" id="probScoreWrap" title="Setup quality = Trend 4 + DTE 2 + R:R 2 + Event risk 2. Independent of the signal score; not a win probability.">
@@ -1404,10 +1530,13 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
           </div>
           <div class="prob-breakdown" id="probBreakdown"></div>
           <div class="prob-guide">
-            <span style="background:rgba(239,68,68,0.1);color:#ef4444">1–3 Skip</span>
-            <span style="background:rgba(245,158,11,0.1);color:#f59e0b">4–5 Watch</span>
-            <span style="background:rgba(132,204,22,0.1);color:#84cc16">6–7 Consider</span>
-            <span style="background:rgba(34,197,94,0.1);color:#22c55e">8–10 A+ Setup</span>
+            <span style="background:rgba(34,197,94,0.12);color:#22c55e">A/A+ → normal size</span>
+            <span style="background:rgba(132,204,22,0.12);color:#84cc16">B → half size</span>
+            <span style="background:rgba(245,158,11,0.12);color:#f59e0b">C/D → paper only</span>
+            <span style="background:rgba(239,68,68,0.12);color:#ef4444">SKIP → no trade</span>
+          </div>
+          <div class="grade-policy">
+            <strong>Grade policy:</strong> A/A+ normal size · B half size · C/D paper only · SKIP no trade — <strong>and that's a successful outcome.</strong>
           </div>
           <div style="font-size:0.6rem;color:var(--muted);margin-top:4px">Trend 4 · DTE 2 · R:R 2 · Event 2 — independent of the signal score</div>
         </div>
@@ -1432,6 +1561,20 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
         </div>
       </div>
       <div id="sigEntryNote" style="font-size:0.68rem;color:var(--muted);padding:5px 8px;background:var(--surface2);border-radius:6px;margin-bottom:10px;line-height:1.5"></div>
+
+      <!-- Editable execution: planned SL/targets are never recalculated from the fill -->
+      <div class="entry-exec" id="entryExec">
+        <div class="entry-exec-head">
+          <span>✍️ Actual fill <span class="entry-exec-hint">planned entry stays locked</span></span>
+          <span id="sigEntryValidity" class="entry-validity">—</span>
+        </div>
+        <div class="entry-exec-row">
+          <input id="sigEntryInput" type="number" step="0.05" min="0.05" inputmode="decimal" placeholder="Your fill ₹" aria-label="Actual option fill price">
+          <button type="button" id="sigUseLiveBtn" class="entry-btn" onclick="useLiveSignalEntry()">Use live</button>
+          <button type="button" id="sigConfirmBtn" class="entry-btn entry-btn-primary" onclick="confirmSignalEntry()">✓ Confirm entry</button>
+        </div>
+        <div id="sigActualNote" class="entry-actual-note">Enter the price you actually paid. SL and targets stay at the planned levels.</div>
+      </div>
 
       <div class="sig-targets" id="sigTargets">
         <div class="sig-target"><div class="tgt-label">Target 1</div><div class="tgt-val" id="sigT1">—</div></div>
@@ -1462,6 +1605,10 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
         <div class="data-row"><span class="label">Breadth</span><span class="val" id="si-breadth">—</span></div>
         <div class="data-row"><span class="label">Trend (VWAP)</span><span class="val" id="si-trend">—</span></div>
         <div class="data-row"><span class="label">Prev Day H / L</span><span class="val" id="si-pdh">—</span></div>
+        <div class="data-row"><span class="label">Day Type</span><span class="val" id="si-daytype">—</span></div>
+        <div class="data-row"><span class="label">5m Trigger</span><span class="val" id="si-trigger">—</span></div>
+        <div class="data-row"><span class="label">Option Quality</span><span class="val" id="si-optq">—</span></div>
+        <div class="data-row"><span class="label">Exp. Move (daily)</span><span class="val" id="si-em">—</span></div>
         <div class="data-row"><span class="label">Nifty Volume (ETF proxy)</span><span class="val" id="si-vol">—</span></div>
         <div class="data-row"><span class="label">Vol vs same-time avg</span><span class="val" id="si-volavg">—</span></div>
         <div class="data-row"><span class="label">ATM Strike</span><span class="val" id="si-atm">—</span></div>
@@ -1501,7 +1648,7 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
   <div class="tlog-header">
     <div>
       <div style="font-family:'Inter',sans-serif;font-size:0.8rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:var(--accent)">📓 Trading Log</div>
-      <div style="font-size:0.68rem;color:var(--muted);margin-top:2px">Record outcomes of each signal · Saved to GitHub · Persists across devices</div>
+      <div style="font-size:0.68rem;color:var(--muted);margin-top:2px">Signals are valid for 15 min · one open trade at a time · planned SL/targets stay fixed when you edit your fill</div>
     </div>
     <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:center">
       <div id="tlogStorageStatus" style="font-size:0.68rem;color:var(--muted)">Loading...</div>
@@ -1509,6 +1656,8 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
       <button onclick="tlogExportCSV()" style="background:var(--surface2);border:1px solid var(--border2);color:var(--muted2);padding:4px 10px;border-radius:6px;font-size:0.7rem;cursor:pointer;font-family:'Inter',sans-serif">↓ Export CSV</button>
     </div>
   </div>
+
+  <div id="openPosPanel" class="open-pos" style="display:none"></div>
 
   <div style="overflow-x:auto">
     <table class="tlog-table">
@@ -1523,27 +1672,33 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
           <th>Volume</th>
           <th>Regime</th>
           <th>Exit ₹</th>
-          <th>P&L</th>
+          <th>P&amp;L</th>
+          <th>Status</th>
           <th>Outcome</th>
           <th>Notes</th>
           <th>Action</th>
         </tr>
       </thead>
       <tbody id="tlogBody">
-        <tr><td colspan="13" style="color:var(--muted);text-align:center;padding:20px">No signals logged yet — signals will appear here automatically</td></tr>
+        <tr><td colspan="14" style="color:var(--muted);text-align:center;padding:20px">No signals logged yet — signals will appear here automatically</td></tr>
       </tbody>
     </table>
   </div>
 
   <div class="tlog-stats" id="tlogStats">
-    <div class="tlog-stat">Total signals: <strong id="tlog-total">0</strong></div>
+    <div class="tlog-stat">Total: <strong id="tlog-total">0</strong></div>
+    <div class="tlog-stat">Open: <strong id="tlog-open" style="color:#f59e0b">0</strong></div>
     <div class="tlog-stat">Wins: <strong id="tlog-wins" style="color:#22c55e">0</strong></div>
     <div class="tlog-stat">Losses: <strong id="tlog-losses" style="color:#ef4444">0</strong></div>
     <div class="tlog-stat">Win Rate: <strong id="tlog-winrate">—</strong></div>
-    <div class="tlog-stat">Avg P&L: <strong id="tlog-avgpnl">—</strong></div>
-    <div class="tlog-stat">Best day: <strong id="tlog-best" style="color:#22c55e">—</strong></div>
+    <div class="tlog-stat">Avg P&amp;L: <strong id="tlog-avgpnl">—</strong></div>
+    <div class="tlog-stat">Avg R: <strong id="tlog-avgr">—</strong></div>
+    <div class="tlog-stat">Profit Factor: <strong id="tlog-pf">—</strong></div>
+    <div class="tlog-stat">Best trade: <strong id="tlog-best" style="color:#22c55e">—</strong></div>
     <div class="tlog-stat">Skipped: <strong id="tlog-skipped" style="color:var(--muted)">0</strong></div>
+    <div class="tlog-stat">Missed: <strong id="tlog-missed" style="color:var(--muted)">0</strong></div>
   </div>
+  <div id="tlogByGrade" class="tlog-grade-stats">Grade stats will appear after closed trades.</div>
 </div>
 
 <div class="section-label">Important Announcements</div>
@@ -1591,8 +1746,8 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
 <!-- ── NEWS ── -->
 <div class="section-label">Market News</div>
 <div class="news-wrap">
-  <div class="news-col" id="toi">
-    <h3>Times of India</h3>
+  <div class="news-col" id="etmarkets">
+    <h3>ET Markets</h3>
     <div class="content"><div class="skeleton"></div></div>
   </div>
   <div class="news-col" id="livemint">
@@ -1611,6 +1766,11 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
 // Set your Cloudflare Worker URL after deploying cloudflare-worker.js
 // Format: https://YOUR-WORKER-NAME.YOUR-SUBDOMAIN.workers.dev
 const WORKER_URL = "https://choudhary-dashboard.ivijaysinghchoudhary.workers.dev";
+
+// Optional: separate Worker that proxies + caches NSE API responses.
+// Deploy worker.js from this folder, then paste its URL below.
+// Leave "" to keep using r.jina.ai directly.
+const NSE_WORKER_URL = "https://nse-proxy.ivijaysinghchoudhary.workers.dev";
 
 // ── NSE F&O RULES (verified 20-Oct-2026) ─────────────────────────────
 // Weekly NIFTY expiry: Tuesday. Monthly: last Tuesday.
@@ -1747,7 +1907,29 @@ async function jinaJSON(url, timeoutMs = 16000) {
   }
   return JSON.parse(txt);
 }
+let _nseWorkerDownUntil = 0;
 async function nseAPI(path, timeoutMs = 16000) {
+  const workerBase = String(NSE_WORKER_URL || "").trim().replace(/\/+$/, "");
+  if (workerBase && Date.now() > _nseWorkerDownUntil) {
+    try {
+      const r = await fetch(workerBase + "/nse" + path, {
+        signal: AbortSignal.timeout(Math.min(timeoutMs || 16000, 8000)),
+        headers: { "Accept": "application/json" },
+        cache: "no-store"
+      });
+      if (r.ok) {
+        const ct = (r.headers.get("content-type") || "").toLowerCase();
+        if (ct.includes("json")) {
+          const data = await r.json();
+          if (data && !data.error) return data;
+        }
+      }
+      // Worker answered, but not with usable JSON: use Jina for a short while.
+      _nseWorkerDownUntil = Date.now() + 2 * 60 * 1000;
+    } catch {
+      _nseWorkerDownUntil = Date.now() + 2 * 60 * 1000;
+    }
+  }
   return jinaJSON(NSE_BASE + path, timeoutMs);
 }
 const _chartCache = new Map();
@@ -2850,19 +3032,90 @@ function rssDate(d) {
   return t.toDateString();
 }
 // Try feeds in order; keep the first one that returns usable items.
+// rss2json is dead (403 for every feed as of Oct 2026), so parse the XML
+// directly and fall back to Jina's raw-text proxy when CORS blocks us.
+const _rssCache = new Map();
+
+function parseFeedXml(raw) {
+  if (!raw || typeof raw !== "string") return [];
+  let text = raw;
+  const start = text.search(/<rss|<feed|<rdf:RDF/i);
+  if (start > 0) text = text.slice(start);
+  const endMatch = text.match(/<\/rss>|<\/feed>/i);
+  if (endMatch) text = text.slice(0, text.indexOf(endMatch[0]) + endMatch[0].length);
+
+  const doc = new DOMParser().parseFromString(text, "text/xml");
+  if (doc.querySelector("parsererror")) return [];
+  let nodes = [...doc.querySelectorAll("item")];
+  if (!nodes.length) nodes = [...doc.querySelectorAll("entry")];
+
+  return nodes.map(n => {
+    const textOf = tag => {
+      const el = n.getElementsByTagName(tag)[0];
+      return el ? (el.textContent || "").trim() : "";
+    };
+    let link = textOf("link");
+    if (!link) link = n.getElementsByTagName("link")[0]?.getAttribute("href") || "";
+    const pubDate = textOf("pubDate") || textOf("published") || textOf("updated") || textOf("dc:date");
+    return {
+      title: textOf("title"),
+      link,
+      pubDate,
+      description: textOf("description") || textOf("summary"),
+    };
+  }).filter(i => i.title && i.link);
+}
+
+function fetchWithTimeout(url, opts = {}, ms = 12000) {
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), ms);
+  return fetch(url, { ...opts, signal: ctrl.signal }).finally(() => clearTimeout(timer));
+}
+
+async function fetchFeedText(url) {
+  // Direct first. Some feeds allow CORS; many do not.
+  try {
+    const r = await fetchWithTimeout(url, { headers: { "Accept": "application/rss+xml, application/xml, text/xml, */*" } });
+    if (r.ok) {
+      const t = await r.text();
+      if (/<rss|<feed|<rdf:RDF/i.test(t)) return t;
+    }
+  } catch {}
+  // Jina raw-text fallback. The header keeps it as XML instead of markdown.
+  try {
+    const r = await fetchWithTimeout(JINA_BASE + url, { headers: { "X-Return-Format": "text" } });
+    if (r.ok) {
+      const t = await r.text();
+      if (/<rss|<feed|<rdf:RDF/i.test(t)) return t;
+    }
+  } catch {}
+  return "";
+}
+
 async function rssItems(urls, filterFn) {
   for (const url of urls) {
     try {
-      const r = await fetch("https://api.rss2json.com/v1/api.json?rss_url=" + encodeURIComponent(url));
-      if (!r.ok) continue;
-      const d = await r.json();
-      if (d.status !== "ok" || !Array.isArray(d.items)) continue;
-      let items = d.items.filter(i => i && i.title);
-      if (filterFn) {
-        const matched = items.filter(filterFn);
-        if (matched.length >= 2) items = matched; // prefer topical matches, else keep the feed as-is
+      const cached = _rssCache.get(url);
+      if (cached && Date.now() - cached.ts < 10 * 60000 && cached.items.length) {
+        let items = cached.items;
+        if (filterFn) {
+          const matched = items.filter(filterFn);
+          if (matched.length >= 2) items = matched;
+        }
+        if (items.length) return items;
       }
-      if (items.length) return items;
+
+      const text = await fetchFeedText(url);
+      const parsed = parseFeedXml(text);
+      if (parsed.length) {
+        _rssCache.set(url, { ts: Date.now(), items: parsed });
+        let items = parsed;
+        if (filterFn) {
+          const matched = items.filter(filterFn);
+          if (matched.length >= 2) items = matched;
+        }
+        if (items.length) return items;
+      }
     } catch {}
   }
   return [];
@@ -2923,7 +3176,11 @@ async function fetchRSS(url, id) {
         <a href="${escHtml(n.link)}" target="_blank" rel="noopener">${escHtml(n.title)}</a>
         <div class="news-date">${escHtml(rssDate(n.pubDate))}</div>
       </div>`).join("")
-    : "<div style='color:var(--muted)'>Feed unavailable</div>";
+    : `<div style="color:var(--muted);font-size:0.78rem;line-height:1.6">
+        Feed unavailable right now — direct and proxy fetches both failed.<br>
+        <a href="${escHtml(url)}" target="_blank" rel="noopener" style="color:var(--accent)">Open source ↗</a>
+        <div style="font-size:0.62rem;color:var(--muted);margin-top:4px">Retries automatically with the next refresh</div>
+      </div>`;
 }
 
 /* ─── NIFTY CHART (Chart.js + Yahoo data via Jina) ─── */
@@ -3058,9 +3315,9 @@ function fmtCr(val) {
   return { str: (n >= 0 ? "+" : "-") + formatted, color: n >= 0 ? "#22c55e" : "#ef4444" };
 }
 
-function renderFIITable(tbodyId, rows) {
+function renderFIITable(tbodyId, rows, emptyMsg = "No data available") {
   if (!rows.length) {
-    document.getElementById(tbodyId).innerHTML = `<tr><td colspan="7" style="color:var(--muted);padding:12px;text-align:center">No data available</td></tr>`;
+    document.getElementById(tbodyId).innerHTML = `<tr><td colspan="7" style="color:var(--muted);padding:12px;text-align:center">${emptyMsg}</td></tr>`;
     return;
   }
   let html = "";
@@ -3082,69 +3339,211 @@ function renderFIITable(tbodyId, rows) {
 }
 
 function updateFIISummary(suffix, rows) {
+  const fe = document.getElementById("fiiNet" + suffix);
+  const de = document.getElementById("diiNet" + suffix);
+  const ce = document.getElementById("combined" + suffix);
+  if (!rows.length) {
+    for (const el of [fe, de, ce]) {
+      if (!el) continue;
+      el.textContent = "—";
+      el.style.color = "var(--muted)";
+    }
+    return;
+  }
   const fiiTotal = rows.reduce((a, r) => a + (r.fiiBuy - r.fiiSell), 0);
   const diiTotal = rows.reduce((a, r) => a + (r.diiBuy - r.diiSell), 0);
   const combined = fiiTotal + diiTotal;
   const fn = fmtCr(fiiTotal), dn = fmtCr(diiTotal), cn = fmtCr(combined);
-  const fe = document.getElementById("fiiNet" + suffix);
-  const de = document.getElementById("diiNet" + suffix);
-  const ce = document.getElementById("combined" + suffix);
   if (fe) { fe.textContent = fn.str; fe.style.color = fn.color; }
   if (de) { de.textContent = dn.str; de.style.color = dn.color; }
   if (ce) { ce.textContent = cn.str; ce.style.color = cn.color; }
 }
 
-async function loadFIIDII() {
-  try {
-    // NSE returns one row per category per day: {buyValue, sellValue, netValue, category, date}
-    const data = await nseAPI("/api/fiidiiTradeReact");
-    if (!Array.isArray(data) || !data.length) throw new Error("empty");
+/* ── FII/DII history helpers ── */
+const ET_FII_URL = "https://economictimes.indiatimes.com/markets/fii-dii-activity/cash-provisional";
+const FII_MONTHS = { jan:0, feb:1, mar:2, apr:3, may:4, jun:5, jul:6, aug:7, sep:8, oct:9, nov:10, dec:11 };
+let _fiiHistCache = { at: 0, rows: [] };
 
-    const byDate = new Map();
-    for (const item of data) {
-      const date = item.date || item.trading_date;
-      if (!date) continue;
-      const cat = String(item.category || "").toUpperCase();
-      if (!byDate.has(date)) byDate.set(date, { date, fiiBuy:0, fiiSell:0, diiBuy:0, diiSell:0 });
-      const rec = byDate.get(date);
-      const buy = parseFloat(item.buyValue || 0);
-      const sell = parseFloat(item.sellValue || 0);
-      if (cat.includes("FII") || cat.includes("FPI")) { rec.fiiBuy += buy; rec.fiiSell += sell; }
-      else if (cat.includes("DII")) { rec.diiBuy += buy; rec.diiSell += sell; }
+function parseFIIDate(value) {
+  if (value instanceof Date && !isNaN(value)) return value;
+  const s = String(value || "").trim();
+  let m = s.match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})$/);
+  if (m) {
+    const mon = FII_MONTHS[m[2].toLowerCase()];
+    if (mon == null) return null;
+    return new Date(+m[3], mon, +m[1]);
+  }
+  m = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
+  const d = new Date(s);
+  return isNaN(d) ? null : d;
+}
+
+function fiiDateLabel(d) {
+  const mon = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"][d.getMonth()];
+  return `${String(d.getDate()).padStart(2,"0")}-${mon}-${d.getFullYear()}`;
+}
+
+function fiiNum(v) {
+  const n = parseFloat(String(v).replace(/,/g, ""));
+  return Number.isFinite(n) ? n : 0;
+}
+
+function parseETFIIText(txt, ref = new Date()) {
+  const src = String(txt || "");
+  const start = src.indexOf("FII & DII Buy-Sell Activity");
+  const end = src.indexOf("Disclaimer", start >= 0 ? start : 0);
+  const section = start >= 0 ? src.slice(start, end > start ? end : undefined) : src;
+  // ET rows: "19 Oct  11,240.7  -12,389.3  -1,148.7  14,781.4  -11,580.2  3,201.2"
+  const re = /(\d{1,2}\s+[A-Za-z]{3}(?:\s+\d{4})?)\s+(-?[\d,]+(?:\.\d+)?)\s+(-?[\d,]+(?:\.\d+)?)\s+(-?[\d,]+(?:\.\d+)?)\s+(-?[\d,]+(?:\.\d+)?)\s+(-?[\d,]+(?:\.\d+)?)\s+(-?[\d,]+(?:\.\d+)?)/g;
+  const rows = new Map();
+  let m;
+  while ((m = re.exec(section))) {
+    const parts = m[1].trim().split(/\s+/);
+    const day = +parts[0], mon = FII_MONTHS[String(parts[1]).toLowerCase()];
+    if (mon == null) continue;
+    let d;
+    if (parts[2]) d = new Date(+parts[2], mon, day);
+    else {
+      d = new Date(ref.getFullYear(), mon, day);
+      // The table is a trailing 30-day window; a future-looking date belongs to last year.
+      if (d.getTime() - ref.getTime() > 7 * 86400000) d = new Date(ref.getFullYear() - 1, mon, day);
     }
+    if (isNaN(d)) continue;
+    const key = fiiDateLabel(d);
+    const fiiBuy = Math.abs(fiiNum(m[2]));
+    const fiiSell = Math.abs(fiiNum(m[3]));
+    const diiBuy = Math.abs(fiiNum(m[5]));
+    const diiSell = Math.abs(fiiNum(m[6]));
+    if (!fiiBuy && !fiiSell && !diiBuy && !diiSell) continue;
+    rows.set(key, { date: key, dateObj: d, fiiBuy, fiiSell, diiBuy, diiSell, source: "ET Markets" });
+  }
+  return [...rows.values()];
+}
 
-    const rows = [...byDate.values()]
-      .filter(r => r.fiiBuy > 0 || r.fiiSell > 0 || r.diiBuy > 0 || r.diiSell > 0)
-      .sort((a,b) => new Date(b.date) - new Date(a.date));
+async function fetchETFIIDIIHistory() {
+  if (_fiiHistCache.rows.length && Date.now() - _fiiHistCache.at < 15 * 60 * 1000) {
+    return _fiiHistCache.rows;
+  }
+  const r = await fetchWithTimeout(JINA_BASE + ET_FII_URL, {
+    headers: { "X-Return-Format": "text", "Accept": "text/plain" },
+  }, 20000);
+  if (!r.ok) throw new Error("ET HTTP " + r.status);
+  const rows = parseETFIIText(parseJinaText(await r.text()));
+  if (!rows.length) throw new Error("ET history parse empty");
+  _fiiHistCache = { at: Date.now(), rows };
+  return rows;
+}
+
+function fiiWeekStart(ref) {
+  const d = new Date(ref.getFullYear(), ref.getMonth(), ref.getDate());
+  d.setDate(d.getDate() - ((d.getDay() + 6) % 7)); // Monday
+  return d;
+}
+
+function fiiHolidaysInRange(start, end, until = new Date()) {
+  const months = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+  const out = [];
+  const d = new Date(start);
+  while (d < end) {
+    if (d.getDay() !== 0 && d.getDay() !== 6 && d <= until) {
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2,"0")}-${String(d.getDate()).padStart(2,"0")}`;
+      if (NSE_HOLIDAYS.has(key)) out.push(`${d.getDate()} ${months[d.getMonth()]}`);
+    }
+    d.setDate(d.getDate() + 1);
+  }
+  return out;
+}
+
+function parseNseFIIRows(data) {
+  const byDate = new Map();
+  if (!Array.isArray(data)) return [];
+  for (const item of data) {
+    const dateObj = parseFIIDate(item.date || item.trading_date);
+    if (!dateObj) continue;
+    const key = fiiDateLabel(dateObj);
+    if (!byDate.has(key)) {
+      byDate.set(key, { date: key, dateObj, fiiBuy:0, fiiSell:0, diiBuy:0, diiSell:0, source: "NSE" });
+    }
+    const rec = byDate.get(key);
+    const cat = String(item.category || "").toUpperCase();
+    const buy = Math.abs(fiiNum(item.buyValue));
+    const sell = Math.abs(fiiNum(item.sellValue));
+    if (cat.includes("FII") || cat.includes("FPI")) { rec.fiiBuy += buy; rec.fiiSell += sell; }
+    else if (cat.includes("DII")) { rec.diiBuy += buy; rec.diiSell += sell; }
+  }
+  return [...byDate.values()].filter(r => r.fiiBuy || r.fiiSell || r.diiBuy || r.diiSell);
+}
+
+function setFiiNote(tabId, html) {
+  const pane = document.getElementById("fii-tab-" + tabId);
+  if (!pane) return;
+  let note = pane.querySelector(".fii-source-note");
+  if (!note) {
+    note = document.createElement("div");
+    note.className = "fii-source-note";
+    note.style.cssText = "margin-top:8px;font-size:0.68rem;color:var(--muted);padding:5px 8px;background:var(--surface2);border-radius:6px";
+    pane.appendChild(note);
+  }
+  note.innerHTML = html;
+}
+
+async function loadFIIDII() {
+  let nseRows = [], etRows = [];
+  const results = await Promise.allSettled([
+    nseAPI("/api/fiidiiTradeReact"),
+    fetchETFIIDIIHistory(),
+  ]);
+  if (results[0].status === "fulfilled") nseRows = parseNseFIIRows(results[0].value);
+  if (results[1].status === "fulfilled") etRows = results[1].value;
+
+  try {
+    const merged = new Map();
+    for (const r of etRows) merged.set(r.date, r);
+    for (const r of nseRows) merged.set(r.date, r); // NSE wins on the latest overlapping session
+    const rows = [...merged.values()].sort((a, b) => b.dateObj - a.dateObj);
     if (!rows.length) throw new Error("empty");
 
+    const now = new Date();
+    const thisWeekStart = fiiWeekStart(now);
+    const nextWeekStart = new Date(thisWeekStart); nextWeekStart.setDate(nextWeekStart.getDate() + 7);
+    const prevWeekStart = new Date(thisWeekStart); prevWeekStart.setDate(prevWeekStart.getDate() - 7);
+
     const dayRows  = rows.slice(0, 1);
-    const weekRows = rows.slice(0, 5);
-    const prevRows = rows.slice(5, 10);
+    const weekRows = rows.filter(r => r.dateObj >= thisWeekStart && r.dateObj < nextWeekStart);
+    const prevRows = rows.filter(r => r.dateObj >= prevWeekStart && r.dateObj < thisWeekStart);
 
     renderFIITable("fiiBodyToday",    dayRows);
-    renderFIITable("fiiBodyWeek",     weekRows);
-    renderFIITable("fiiBodyPrevWeek", prevRows);
+    renderFIITable("fiiBodyWeek",     weekRows, "No sessions this week yet");
+    renderFIITable("fiiBodyPrevWeek", prevRows, "No data for the previous week");
     updateFIISummary("Today",    dayRows);
     updateFIISummary("Week",     weekRows);
     updateFIISummary("PrevWeek", prevRows);
 
-    const note = document.getElementById("fii-tab-today");
-    if (note) {
-      const existing = note.querySelector(".fii-source-note");
-      if (existing) existing.remove();
-      const div = document.createElement("div");
-      div.className = "fii-source-note";
-      div.style.cssText = "margin-top:8px;font-size:0.68rem;color:var(--muted);padding:5px 8px;background:var(--surface2);border-radius:6px";
-      div.innerHTML = `ℹ NSE publishes FII/DII after market close (~6–7 PM IST). Latest available: <strong style="color:var(--text)">${dayRows[0]?.date || "—"}</strong>. The public NSE feed usually returns only the latest session, so weekly tabs may repeat it.`;
-      note.appendChild(div);
-    }
+    const latest = dayRows[0]?.date || "—";
+    const hasHistory = etRows.length > 0;
+    const weekHols = fiiHolidaysInRange(thisWeekStart, nextWeekStart, now);
+    const prevHols = fiiHolidaysInRange(prevWeekStart, thisWeekStart, now);
+    setFiiNote("today",
+      `ℹ Latest available: <strong style="color:var(--text)">${latest}</strong>. ` +
+      `Source: ${hasHistory ? "NSE (latest session) + ET Markets (prior sessions)" : "NSE India"}. ` +
+      `Provisional equity cash-market figures; NSE publishes after market close (~6–7 PM IST).`);
+    setFiiNote("week",
+      `ℹ ${weekRows.length} session${weekRows.length === 1 ? "" : "s"} this week (Mon–Sun)` +
+      `${weekRows.length ? ": " + weekRows.slice().reverse().map(r => r.date.slice(0, 6)).join(", ") : ""}. ` +
+      `${weekHols.length ? "Market holiday: " + weekHols.join(", ") + ". " : ""}` +
+      `${hasHistory ? "History from ET Markets provisional data." : "NSE public feed returned only the latest session."}`);
+    setFiiNote("prevweek",
+      prevRows.length
+        ? `ℹ ${prevRows.length} sessions in the previous week (Mon–Fri)${prevHols.length ? "; market holiday: " + prevHols.join(", ") : ""}. Source: ET Markets provisional data.`
+        : `ℹ No previous-week rows were returned by the history source.`);
   } catch {
     const msg = `<tr><td colspan="7" style="padding:16px;text-align:center">
-      <div style="color:var(--muted2);font-size:0.78rem">NSE FII/DII data unavailable</div>
+      <div style="color:var(--muted2);font-size:0.78rem">FII/DII data unavailable</div>
       <div style="margin-top:6px;font-size:0.68rem;color:var(--muted)">
         NSE publishes this after market close (~6–7 PM IST).<br>
-        View live at <a href="https://www.nseindia.com/reports-indices-equity-fiidii" target="_blank" style="color:var(--accent)">nseindia.com</a>
+        View live at <a href="https://www.nseindia.com/reports/fii-dii" target="_blank" style="color:var(--accent)">nseindia.com</a>
+        &nbsp;·&nbsp; History at <a href="${ET_FII_URL}" target="_blank" style="color:var(--accent)">ET Markets</a>
       </div>
     </td></tr>`;
     ["fiiBodyToday","fiiBodyWeek","fiiBodyPrevWeek"].forEach(id => {
@@ -3545,8 +3944,278 @@ function renderSRLevels(levels, spot, srCtx) {
   }
 }
 
+// ── TRADE LIFECYCLE / EXECUTION RULES ────────────────────────────────
+const SIGNAL_VALIDITY_MIN = 15;   // an untaken signal is scrapped after 15 min
+const FIRST_ENTRY_MINS    = 570;  // 09:30 — first 15 min is noise
+const LAST_ENTRY_MINS     = 900;  // 15:00 — exits only after this
+const HARD_EXIT_MINS      = 915;  // 15:15 — force-close intraday positions
+const MAX_HOLD_MIN        = 120;  // time stop
+
+// Hard / soft no-trade windows. Hard blocks produce SKIP; soft blocks cap size.
+function getNoTradeWindow(expiry = getTargetExpiry(), event = getEventRisk()) {
+  const s = getMarketSession();
+  if (!s.isTradingDay) {
+    return { blocked: true, hard: true, label: "Market closed", reason: "Weekend / NSE holiday — no signals" };
+  }
+  if (s.mins < FIRST_ENTRY_MINS) {
+    return { blocked: true, hard: true, label: "Opening range", reason: "First 15 min (09:15–09:30) — wait for the opening range" };
+  }
+  if (s.mins >= LAST_ENTRY_MINS) {
+    return { blocked: true, hard: true, label: "Last 30 min", reason: "No fresh entries after 15:00 — manage exits only" };
+  }
+  if (event?.level === 0) {
+    return { blocked: true, hard: true, label: event.label, reason: "Major event day — no fresh option buys" };
+  }
+  if (expiry?.isExpiryDay) {
+    return { blocked: true, hard: true, label: "0-DTE expiry", reason: "Expiry day — no fresh option buys (theta/gamma crush); paper only" };
+  }
+  if (s.mins >= 720 && s.mins < 795) {
+    return { blocked: false, hard: false, penalty: true, label: "Lunch chop", reason: "12:00–13:15 low-liquidity chop — half size only" };
+  }
+  return { blocked: false, hard: false, label: "Open", reason: "" };
+}
+
+// Classify the day from completed 15m bars. Breakout signals are blocked on
+// range days; counter-trend signals are blocked on trend days.
+function classifyDayType(ictx, expiry = getTargetExpiry()) {
+  if (expiry?.isExpiryDay) {
+    return { type: "expiry", label: "Expiry / 0-DTE", reason: "Gamma-day — no 0-DTE buys after 13:00" };
+  }
+  const bars = ictx?.todayBars || [];
+  if (bars.length < 6) return { type: "unknown", label: "n/a", reason: "Not enough intraday bars yet" };
+
+  const dayHigh = Math.max(...bars.map(b => b.h));
+  const dayLow  = Math.min(...bars.map(b => b.l));
+  const ref     = ictx.pdc || ictx.vwap || 1;
+  const rangePct = (dayHigh - dayLow) / ref * 100;
+
+  const vwapOf = arr => {
+    let pv = 0, vv = 0;
+    arr.forEach(b => { if (b.v > 0) { pv += b.tp * b.v; vv += b.v; } });
+    return vv > 0 ? pv / vv : (arr.length ? arr.reduce((s, b) => s + b.tp, 0) / arr.length : null);
+  };
+  const recent = bars.slice(-8), prior = bars.slice(-16, -8);
+  const vNow  = vwapOf(recent);
+  const vPrev = prior.length ? vwapOf(prior) : vNow;
+  const slope = vPrev ? (vNow - vPrev) / vPrev * 100 : 0;
+
+  let crossings = 0, side = 0;
+  bars.forEach(b => {
+    const s = b.c >= ictx.vwap ? 1 : -1;
+    if (side && s !== side) crossings++;
+    side = s;
+  });
+
+  let type = "range", label = "Range / chop", reason = "VWAP flat — fade extremes, avoid breakout chasing";
+  if (Math.abs(slope) >= 0.035 && crossings <= 4) {
+    type  = slope > 0 ? "trend-up" : "trend-down";
+    label = slope > 0 ? "Trend day ↑" : "Trend day ↓";
+    reason = "VWAP sloping — trade with the trend, not against it";
+  }
+  if (rangePct < 0.25) {
+    type = "range"; label = "Tight range";
+    reason = "Very narrow range — breakouts are likely to fail";
+  }
+  return {
+    type, label, reason,
+    rangePct: +rangePct.toFixed(2),
+    vwapSlope: +slope.toFixed(3),
+    crossings,
+    openingHigh: Math.max(...bars.slice(0, 3).map(b => b.h)),
+    openingLow:  Math.min(...bars.slice(0, 3).map(b => b.l)),
+  };
+}
+
+// ── 5-MINUTE CONFIRMATION TRIGGER ────────────────────────────────────
+// A spot price crossing a level is not an entry. Require the last completed
+// 5m bar to close in the signal direction with real participation.
+let _trigCtx = null, _trigTs = 0, _trigP = null;
+
+function buildTriggerContext(priceData, volData, opts = {}) {
+  const res = priceData?.chart?.result?.[0];
+  if (!res?.timestamp?.length) return { available: false };
+  const q  = res.indicators?.quote?.[0] || {};
+  const ts = res.timestamp;
+
+  const vmap = new Map();
+  const vres = volData?.chart?.result?.[0];
+  if (vres?.timestamp?.length) {
+    const vq = vres.indicators?.quote?.[0] || {};
+    vres.timestamp.forEach((t, i) => {
+      const v = vq.volume?.[i];
+      if (!(v > 0)) return;
+      const s = _istStamp(t);
+      vmap.set(`${s.key}|${s.min}`, v);
+    });
+  }
+
+  const today  = opts.dateKey || todayIST();
+  const nowMin = opts.mins ?? _istMinsNow();
+  const bars = [];
+  ts.forEach((t, i) => {
+    const c = q.close?.[i], o = q.open?.[i];
+    if (c == null || o == null) return;
+    const s = _istStamp(t);
+    if (s.key !== today || s.min < 555 || s.min + 5 > nowMin) return;
+    const h = q.high?.[i] ?? c, l = q.low?.[i] ?? c;
+    bars.push({
+      min: s.min, o, h, l, c,
+      tp: (h + l + c) / 3,
+      v: vmap.get(`${s.key}|${s.min}`) || 0,
+    });
+  });
+  bars.sort((a, b) => a.min - b.min);
+  if (bars.length < 3) return { available: false };
+
+  let pv = 0, vv = 0;
+  bars.forEach(b => { if (b.v > 0) { pv += b.tp * b.v; vv += b.v; } });
+  const vwap5 = vv > 0 ? pv / vv : bars.reduce((s, b) => s + b.tp, 0) / bars.length;
+
+  const last = bars[bars.length - 1];
+  const priorVols = bars.slice(0, -1).slice(-20).map(b => b.v).filter(v => v > 0);
+  let volZ = 0;
+  if (priorVols.length >= 5) {
+    const mean = priorVols.reduce((a, b) => a + b, 0) / priorVols.length;
+    const sd   = Math.sqrt(priorVols.reduce((a, b) => a + (b - mean) ** 2, 0) / priorVols.length);
+    if (sd > 0) volZ = (last.v - mean) / sd;
+  }
+
+  return {
+    available: true,
+    lastClose: last.c,
+    lastOpen: last.o,
+    lastHigh: last.h,
+    lastLow: last.l,
+    lastMin: last.min,
+    lastVol: last.v,
+    volZ: +volZ.toFixed(2),
+    vwap5,
+    barTime: `${String(Math.floor(last.min / 60)).padStart(2, "0")}:${String(last.min % 60).padStart(2, "0")}`,
+    bars: bars.length,
+    dayHigh: Math.max(...bars.map(b => b.h)),
+    dayLow: Math.min(...bars.map(b => b.l)),
+  };
+}
+
+async function getTriggerContext(maxAgeMs = 2 * 60000) {
+  if (_trigCtx && Date.now() - _trigTs < maxAgeMs) return _trigCtx;
+  if (_trigP) return _trigP;
+  _trigP = (async () => {
+    try {
+      const [price, vol] = await Promise.all([
+        yahooChart("^NSEI", "5d", "5m"),
+        yahooChart("NIFTYBEES.NS", "5d", "5m").catch(() => null),
+      ]);
+      const ctx = buildTriggerContext(price, vol);
+      _trigCtx = ctx; _trigTs = Date.now();
+      return ctx;
+    } catch {
+      _trigCtx = { available: false }; _trigTs = Date.now();
+      return _trigCtx;
+    }
+  })().finally(() => { _trigP = null; });
+  return _trigP;
+}
+
+function triggerFor(type, trend, trig) {
+  if (!trig?.available) {
+    return { available: false, ok: false, reason: "5m data unavailable — cannot confirm entry" };
+  }
+  if (!trend?.available) {
+    return { available: false, ok: false, reason: "VWAP unavailable — cannot confirm entry" };
+  }
+  const bullBar = trig.lastClose > trig.lastOpen;
+  const bearBar = trig.lastClose < trig.lastOpen;
+  const volOK   = trig.volZ >= 0.5;
+  const pdhBreak = trend.pdh != null && trig.lastClose > trend.pdh;
+  const pdlBreak = trend.pdl != null && trig.lastClose < trend.pdl;
+
+  if (type === "CE") {
+    const aboveVWAP = trig.lastClose > trend.vwap;
+    const ok = (aboveVWAP && bullBar && volOK) || (pdhBreak && bullBar && trig.volZ >= 0);
+    let reason = "confirmed: 5m close above VWAP, bullish bar, volume";
+    if (!ok) {
+      if (!aboveVWAP && !pdhBreak) reason = `5m close ${Math.round(trig.lastClose)} is not above VWAP ${Math.round(trend.vwap)}`;
+      else if (!bullBar)           reason = "last 5m bar closed below its open";
+      else if (!volOK)             reason = `volume z-score ${trig.volZ} < 0.5`;
+    }
+    return { available: true, ok, reason, volZ: trig.volZ, lastClose: trig.lastClose, barTime: trig.barTime };
+  }
+  if (type === "PE") {
+    const belowVWAP = trig.lastClose < trend.vwap;
+    const ok = (belowVWAP && bearBar && volOK) || (pdlBreak && bearBar && trig.volZ >= 0);
+    let reason = "confirmed: 5m close below VWAP, bearish bar, volume";
+    if (!ok) {
+      if (!belowVWAP && !pdlBreak) reason = `5m close ${Math.round(trig.lastClose)} is not below VWAP ${Math.round(trend.vwap)}`;
+      else if (!bearBar)           reason = "last 5m bar closed above its open";
+      else if (!volOK)             reason = `volume z-score ${trig.volZ} < 0.5`;
+    }
+    return { available: true, ok, reason, volZ: trig.volZ, lastClose: trig.lastClose, barTime: trig.barTime };
+  }
+  return { available: false, ok: false, reason: "no direction" };
+}
+
+// ── OPTION QUALITY ───────────────────────────────────────────────────
+function bsDelta(S, K, T, r, sigma, type) {
+  if (!(S > 0) || !(K > 0) || !(T > 0) || !(sigma > 0)) return 0;
+  const d1 = (Math.log(S / K) + (r + 0.5 * sigma * sigma) * T) / (sigma * Math.sqrt(T));
+  return type === "CE" ? normCDF(d1) : normCDF(d1) - 1;
+}
+
+function assessOptionQuality(ep, spot, dte) {
+  const reasons = [];
+  let ok = true;
+  const bid = +ep?.bid || 0, ask = +ep?.ask || 0, mid = +ep?.midPrice || 0;
+  const spreadAbs = ask > 0 && bid > 0 ? Math.max(0, ask - bid) : 0;
+  const spreadPct = mid > 0 && spreadAbs > 0 ? spreadAbs / mid * 100 : null;
+  const oi = +ep?.oi || 0;
+  const volume = +ep?.volume || 0;
+  const iv = +ep?.iv || 0;
+  const T = Math.max(0.5 / 252, (dte ?? 1) / 252);
+  const sigma = (iv > 0 ? iv : 15) / 100;
+  const delta = Math.abs(bsDelta(spot, ep?.strike || spot, T, 0.065, sigma, ep?.type || "CE"));
+
+  if (!(mid > 0)) { ok = false; reasons.push("no live quote"); }
+  if (!(bid > 0) || !(ask > 0)) { ok = false; reasons.push("no two-way bid/ask"); }
+  else if (spreadPct != null && spreadPct > 2.5) {
+    ok = false;
+    reasons.push(`spread ${spreadPct.toFixed(1)}% > 2.5%`);
+  }
+  if (oi < 10000) { ok = false; reasons.push(`OI ${oi.toLocaleString("en-IN")} < 10,000`); }
+  if (delta < 0.30) { ok = false; reasons.push(`delta ${delta.toFixed(2)} < 0.30 (too OTM)`); }
+  else if (delta > 0.80) reasons.push(`delta ${delta.toFixed(2)} (deep ITM)`);
+  if (!(volume > 0)) reasons.push("no volume today");
+
+  return {
+    ok, spreadPct: spreadPct == null ? null : +spreadPct.toFixed(2),
+    spreadAbs: +spreadAbs.toFixed(2), delta: +delta.toFixed(2),
+    oi, volume, iv: +iv.toFixed(1), reasons,
+    summary: ok ? "OK" : reasons.slice(0, 2).join(" · "),
+  };
+}
+
+// ATM straddle ≈ expected absolute move to expiry. Divide by √DTE for a
+// rough one-day expected move, then compare with the move T1 requires.
+async function fetchExpectedMove(spot, expiry) {
+  try {
+    const atm = getATM(spot);
+    const dte = Math.max(1, expiry?.daysToExpiry ?? 1);
+    const [ce, pe] = await Promise.all([
+      fetchRealOptionPrice(atm, "CE"),
+      fetchRealOptionPrice(atm, "PE"),
+    ]);
+    if (!ce?.midPrice || !pe?.midPrice) return null;
+    const straddle = ce.midPrice + pe.midPrice;
+    return {
+      atm, dte, straddle: +straddle.toFixed(1),
+      daily: +(straddle / Math.sqrt(dte)).toFixed(1),
+      weekly: +straddle.toFixed(1),
+    };
+  } catch { return null; }
+}
+
 // Core signal logic — v2 with corrected factors
-function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty, volScore, volLabel, trend }) {
+function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty, volScore, volLabel, trend, trigger, dayType, noTrade }) {
   const dayChgPct = ((spot - prevClose) / prevClose * 100);
   const atm = getATM(spot);
 
@@ -3680,15 +4349,70 @@ function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, brea
       : "Trend filter passed — price below VWAP");
   }
 
+  // ── EXPIRY / EVENT / NO-TRADE / TRIGGER / DAY-TYPE GATES ─────────────
+  const expiry    = getTargetExpiry();
+  const dte       = expiry.daysToExpiry;
+  const eventRisk = getEventRisk();
+  const nt        = noTrade || getNoTradeWindow(expiry, eventRisk);
+  const bias      = type;
+  let actionable  = true;
+  let waitReason  = "";
+
+  // Hard blocks: market closed, opening 15m, after 15:00, event day, 0-DTE.
+  if (nt.hard) {
+    direction = "SKIP"; type = null; confidence = "LOW"; confClass = "conf-low";
+    cardClass = "sideways"; emoji = "🚫"; actionable = false;
+    waitReason = `${nt.label} — ${nt.reason}`;
+    warnings.push(`🚫 ${nt.reason}`);
+    flags.push(`🚫 ${nt.label}: ${nt.reason}`);
+  } else if (nt.penalty) {
+    warnings.push(`⚠ ${nt.label}: ${nt.reason}`);
+    flags.push(`⚠ ${nt.label} — half size only`);
+  }
+
+  // 5-minute confirmation: last completed 5m bar + volume z-score.
+  let triggerInfo = null;
+  if (type) {
+    triggerInfo = triggerFor(type, trend, trigger);
+    if (!triggerInfo.ok) {
+      actionable = false;
+      waitReason = `WAIT — ${type} bias, but ${triggerInfo.reason}`;
+      warnings.push(`⏳ 5m trigger not confirmed: ${triggerInfo.reason}`);
+      flags.push(`⏳ WAIT: ${triggerInfo.reason}`);
+      cardClass = "wait";
+    } else {
+      reasons.push(`5m trigger confirmed — ${triggerInfo.reason}`);
+    }
+  }
+
+  // Day-type gate: breakout chasing fails in ranges; counter-trend fails in trends.
+  if (type && dayType) {
+    const rangeBreakout = dayType.type === "range" &&
+      ((type === "CE" && trend?.abovePDH) || (type === "PE" && trend?.belowPDL));
+    const counterTrend = (dayType.type === "trend-up" && type === "PE") ||
+                         (dayType.type === "trend-down" && type === "CE");
+    if (rangeBreakout) {
+      actionable = false;
+      waitReason = `WAIT — ${dayType.label}: breakout at the prior-day level is likely to fail`;
+      warnings.push(`⏳ ${dayType.reason}`);
+      flags.push(`⏳ WAIT: ${dayType.reason}`);
+      cardClass = "wait";
+    } else if (counterTrend) {
+      actionable = false;
+      waitReason = `WAIT — ${dayType.label}: counter-trend ${type} blocked`;
+      warnings.push(`⏳ ${dayType.reason}`);
+      flags.push(`⏳ WAIT: counter-trend ${type} vs ${dayType.label}`);
+      cardClass = "wait";
+    } else {
+      reasons.push(`Day type: ${dayType.label}`);
+    }
+  }
+
   const highRisk = vix > 20 || ivrFlag === "bad" || ivrFlag === "avoid";
-  if (highRisk && cardClass !== "sideways") {
+  if (highRisk && cardClass !== "sideways" && cardClass !== "wait") {
     cardClass = "danger";
     confidence = confidence === "HIGH" ? "MEDIUM" : "LOW";
   }
-
-  // ── EXPIRY & DTE — declared here so all blocks below can use them ──
-  const expiry = getTargetExpiry();
-  const dte    = expiry.daysToExpiry;
 
   // ── SMART STRIKE SELECTOR ──
   // Conditions to consider OTM:
@@ -3783,7 +4507,7 @@ function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, brea
     sl = "🛑 Stay out — low conviction";
   }
 
-  return { direction, type, confidence, confClass, cardClass, emoji, strikeName, t1, t2, t3, sl, reasons, warnings, flags, score, highRisk, atm, expiry, primaryStrike, canConsiderOTM, strongConviction, ivrFlag, gapFlag, highVolRegime, trend };
+  return { direction, type, confidence, confClass, cardClass, emoji, strikeName, t1, t2, t3, sl, reasons, warnings, flags, score, highRisk, atm, expiry, primaryStrike, canConsiderOTM, strongConviction, ivrFlag, gapFlag, highVolRegime, trend, actionable, waitReason, bias, trigger: triggerInfo, dayType, noTrade: nt };
 }
 
 /* ─── PROBABILITY SCORE (0–10) ─── */
@@ -3942,15 +4666,23 @@ function computeSetupQuality(sig, inputs, ctx = {}) {
   if (rr < 1)        finalScore = Math.min(finalScore, 6);
   else if (rr < 1.3) finalScore = Math.min(finalScore, 7);
   if (ev.level === 0) finalScore = Math.min(finalScore, 5);
+  // WAIT-only signals are watchable, never full-size.
+  if (sig.actionable === false) finalScore = Math.min(finalScore, 5);
+  // Option-quality gates: a wide spread / dead OI / bad delta is not tradeable.
+  if (ctx.option && !ctx.option.ok) finalScore = Math.min(finalScore, 4);
+  // Expected-move gate: if T1 needs more than the daily straddle move, the
+  // target is unrealistic for the session.
+  if (ctx.emRatio > 1.2)      finalScore = Math.min(finalScore, 3);
+  else if (ctx.emRatio > 0.8) finalScore = Math.min(finalScore, 6);
 
   let label, color;
-  if (finalScore >= 8)      { label = "A+ Setup — conditions aligned";        color = "#22c55e"; }
-  else if (finalScore >= 6) { label = "B Setup — tradable, normal size";      color = "#84cc16"; }
-  else if (finalScore >= 4) { label = "C Setup — small size or wait";         color = "#f59e0b"; }
-  else if (finalScore >= 2) { label = "D Setup — weak, paper only";           color = "#f97316"; }
-  else                      { label = "No Trade — conditions poor";           color = "#ef4444"; }
+  if (finalScore >= 8)      { label = "A/A+ Setup — normal size";                  color = "#22c55e"; }
+  else if (finalScore >= 6) { label = "B Setup — half size only";                  color = "#84cc16"; }
+  else if (finalScore >= 4) { label = "C Setup — paper only";                      color = "#f59e0b"; }
+  else if (finalScore >= 2) { label = "D Setup — paper only / no trade";           color = "#f97316"; }
+  else                      { label = "SKIP — no trade (a successful outcome)";    color = "#ef4444"; }
 
-  return { score: finalScore, label, color, breakdown, rr, dte, event: ev, trendUsed: trend?.state || "n/a" };
+  return { score: finalScore, label, color, breakdown, rr, dte, event: ev, trendUsed: trend?.state || "n/a", option: ctx.option || null, emRatio: ctx.emRatio ?? null };
 }
 
 function renderProbabilityScore(prob) {
@@ -3967,15 +4699,31 @@ function renderProbabilityScore(prob) {
   document.getElementById("probBar").style.background = prob.color;
 
   // Breakdown pills
-  document.getElementById("probBreakdown").innerHTML = prob.breakdown.map(b =>
+  let pills = prob.breakdown.map(b =>
     `<span class="prob-pill ${b.cls}">${b.label} ${b.pts > 0 ? "+" + b.pts.toFixed(1) : "0"}</span>`
   ).join("");
+  if (prob.option) {
+    pills += `<span class="prob-pill ${prob.option.ok ? "pos" : "neg"}">Option ${prob.option.ok ? "OK" : "✕"} · Δ ${prob.option.delta}${prob.option.spreadPct != null ? " · spr " + prob.option.spreadPct + "%" : ""}</span>`;
+  }
+  if (prob.emRatio != null) {
+    pills += `<span class="prob-pill ${prob.emRatio > 1.2 ? "neg" : prob.emRatio > 0.8 ? "neu" : "pos"}">T1 / daily EM ${prob.emRatio.toFixed(2)}×</span>`;
+  }
+  document.getElementById("probBreakdown").innerHTML = pills;
 }
 
+let currentSignal = null, currentSignalInputs = null, currentSignalTlogId = null, currentSignalAddPromise = null;
+
 function renderSignal(sig, inputs, logEvent = true) {
+  currentSignal = sig;
+  currentSignalInputs = inputs;
+  currentSignalTlogId = null;
+  currentSignalAddPromise = null;
+
   const card = document.getElementById("sigCard");
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
   const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+  const waiting = sig.actionable === false && !!sig.type;
+  const openPos = getOpenPosition();
 
   // Probability score is computed after the entry/SL block below, because
   // the R:R factor needs the actual premium and stop distance.
@@ -3999,6 +4747,8 @@ function renderSignal(sig, inputs, logEvent = true) {
     sig.entryMid = ep.entryMid;
     sig.slPrice  = ep.slPrice;
     sig.t1Price  = ep.t1Price;
+    sig.t2Price  = ep.t2Price;
+    sig.t3Price  = ep.t3Price;
 
     // Then fetch real NSE price and override BS estimate
     updateEntryPriceFromNSE(sig, inputs);
@@ -4019,6 +4769,8 @@ function renderSignal(sig, inputs, logEvent = true) {
     dte:   sig.expiry?.daysToExpiry ?? 5,
     rr:    computeTradeRR(sig, inputs),
     event: inputs.event || getEventRisk(),
+    option: sig.optionQ || null,
+    emRatio: sig.emRatio ?? null,
   };
   const prob = computeSetupQuality(sig, inputs, sig.probCtx);
   renderProbabilityScore(prob);
@@ -4030,13 +4782,36 @@ function renderSignal(sig, inputs, logEvent = true) {
   }
 
   // Card style
-  card.className = "signal-card " + sig.cardClass;
+  card.className = "signal-card " + (waiting ? "wait" : sig.cardClass);
 
-  document.getElementById("sigDirection").textContent   = sig.emoji + " " + sig.direction;
-  document.getElementById("sigDirection").style.color   = sig.type === "CE" ? "#22c55e" : sig.type === "PE" ? "#ef4444" : "#f59e0b";
-  document.getElementById("sigSubtitle").textContent    = sig.highRisk ? "⚠ HIGH VIX — reduce position size significantly" : `Signal generated at ${timeStr}`;
-  document.getElementById("sigConfBadge").textContent   = "● " + sig.confidence + " CONFIDENCE";
-  document.getElementById("sigConfBadge").className     = "sig-confidence " + sig.confClass;
+  // Wait banner — shown whenever the signal exists but is not executable yet.
+  const wb = document.getElementById("sigWaitBanner");
+  if (waiting) {
+    wb.style.display = "block";
+    wb.textContent = `⏳ ${sig.waitReason} — do not enter until the trigger confirms.`;
+  } else if (!sig.type && sig.waitReason) {
+    wb.style.display = "block";
+    wb.textContent = `🚫 ${sig.waitReason}`;
+  } else {
+    wb.style.display = "none";
+    wb.textContent = "";
+  }
+
+  const displayDir = waiting ? `⏳ WAIT — ${sig.type} bias` : `${sig.emoji} ${sig.direction}`;
+  document.getElementById("sigDirection").textContent = displayDir;
+  document.getElementById("sigDirection").style.color = waiting ? "#f59e0b"
+    : sig.type === "CE" ? "#22c55e" : sig.type === "PE" ? "#ef4444" : "#f59e0b";
+
+  const validUntil = new Date(now.getTime() + SIGNAL_VALIDITY_MIN * 60000)
+    .toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
+  document.getElementById("sigSubtitle").textContent = waiting
+    ? `${sig.waitReason}`
+    : sig.type
+      ? `Signal generated at ${timeStr} · entry valid ${SIGNAL_VALIDITY_MIN} min (until ${validUntil})`
+      : (sig.waitReason || `Signal generated at ${timeStr} — no trade`);
+
+  document.getElementById("sigConfBadge").textContent = waiting ? "● WATCH ONLY" : "● " + sig.confidence + " CONFIDENCE";
+  document.getElementById("sigConfBadge").className   = "sig-confidence " + (waiting ? "conf-medium" : sig.confClass);
 
   // Render strike with line breaks and DTE badge
   const lines = sig.strikeName.split("\n");
@@ -4094,15 +4869,68 @@ function renderSignal(sig, inputs, logEvent = true) {
     siTrend.textContent = "n/a";
     siPdh.textContent = "—";
   }
+  const siDay = document.getElementById("si-daytype");
+  if (siDay) {
+    siDay.textContent = sig.dayType ? `${sig.dayType.label}${sig.dayType.rangePct != null ? " · " + sig.dayType.rangePct + "%" : ""}` : "n/a";
+    siDay.style.color = sig.dayType?.type?.startsWith("trend") ? "#22c55e" : sig.dayType?.type === "expiry" ? "#ef4444" : "#f59e0b";
+  }
+  const siTrig = document.getElementById("si-trigger");
+  if (siTrig) {
+    siTrig.textContent = sig.trigger
+      ? (sig.trigger.ok ? `✓ ${sig.trigger.barTime} · vol z ${sig.trigger.volZ}` : `✕ ${sig.trigger.reason}`)
+      : "n/a";
+    siTrig.style.color = sig.trigger?.ok ? "#22c55e" : "#ef4444";
+  }
+  const siOpt = document.getElementById("si-optq");
+  const siEm  = document.getElementById("si-em");
+  if (siOpt) {
+    siOpt.textContent = sig.optionQ ? (sig.optionQ.ok ? `✓ Δ${sig.optionQ.delta} · OI ${fmtVol(sig.optionQ.oi)}` : `✕ ${sig.optionQ.summary}`) : (sig.type ? "⟳ checking…" : "—");
+    siOpt.style.color = sig.optionQ ? (sig.optionQ.ok ? "#22c55e" : "#ef4444") : "var(--muted)";
+  }
+  if (siEm) {
+    siEm.textContent = sig.expMove ? `±${Math.round(sig.expMove.daily)} pts/day` : (sig.type ? "⟳ checking…" : "—");
+    siEm.style.color = sig.emRatio > 1.2 ? "#ef4444" : sig.emRatio > 0.8 ? "#f59e0b" : "#22c55e";
+  }
   document.getElementById("si-atm").textContent     = sig.atm + " (ATM)";
   document.getElementById("si-time").textContent    = timeStr;
 
+  // Editable execution block — the fill is yours; SL/targets stay planned.
+  const entryInput = document.getElementById("sigEntryInput");
+  const confirmBtn = document.getElementById("sigConfirmBtn");
+  const liveBtn    = document.getElementById("sigUseLiveBtn");
+  if (sig.type && sig.primaryStrike) {
+    if (!sig.entryLocked && document.activeElement !== entryInput) {
+      entryInput.value = sig.entryMid ?? "";
+    }
+    entryInput.disabled = !sig.actionable || !!openPos;
+    confirmBtn.disabled = !sig.actionable || !!openPos;
+    liveBtn.disabled    = !sig.actionable;
+    document.getElementById("sigEntryValidity").textContent = sig.actionable
+      ? `Valid ${SIGNAL_VALIDITY_MIN}m · until ${validUntil}`
+      : "WAIT — not executable";
+  } else {
+    entryInput.value = "";
+    entryInput.disabled = true;
+    confirmBtn.disabled = true;
+    liveBtn.disabled = true;
+    document.getElementById("sigEntryValidity").textContent = "—";
+    document.getElementById("sigActualNote").textContent = "No trade — nothing to execute.";
+  }
+  if (sig.type) renderActualEntryNote(sig);
+
   // Log it only when this is a real scheduled signal (not on page-load render)
-  if (logEvent && sig.direction !== "SIDEWAYS") {
+  if (logEvent && (sig.type || sig.direction === "SKIP" || sig.direction === "SIDEWAYS")) {
     addSignalLog(timeStr, sig, inputs);
-    tlogAddEntry(sig, inputs, prob).catch(e => console.warn("Trading log write failed:", e));
-    if (notificationsEnabled) fireNotification(sig, timeStr, prob);
-    playSignalSound(sig.type);
+    currentSignalAddPromise = tlogAddEntry(sig, inputs, prob);
+    currentSignalAddPromise.then(entry => {
+      if (!entry) return;
+      if (entry.status === "SIGNAL" && currentSignal === sig) currentSignalTlogId = entry.id;
+      updateSignalEntryControls();
+    }).catch(e => console.warn("Trading log write failed:", e));
+    if (sig.actionable !== false && sig.type) {
+      if (notificationsEnabled) fireNotification(sig, timeStr, prob);
+      playSignalSound(sig.type);
+    }
   }
 
   document.getElementById("sigNextTime").textContent = getNextSignalTime();
@@ -4198,6 +5026,7 @@ function buildIntradayContext(priceData, volData, opts = {}) {
     volumeAvailable: todayBars.length >= 2 && priorCum.length >= 3 && avgSame > 0,
     volProxy: vmap.size ? "NIFTYBEES" : null,
     priorDays: priorCum.length,
+    todayBars,
     asOf: nowMin,
   };
 }
@@ -4349,7 +5178,11 @@ async function tlogLoad() {
   const { entries, sha, source } = await tlogRead();
   tlogEntries = entries;
   tlogSHA     = sha;
+  tlogEntries.forEach(normalizeTlogStatus);
+  await tlogSweepStalePositions();
+  tlogExpireSignals();
   renderTlog();
+  renderOpenPosition();
   if (el) {
     el.textContent = entries.length
       ? `✓ ${entries.length} entries (${source === "github" ? "GitHub" : "local"})`
@@ -4358,82 +5191,189 @@ async function tlogLoad() {
   }
 }
 
+function normalizeTlogStatus(e) {
+  if (!e.status) {
+    if (e.outcome === "WIN" || e.outcome === "LOSS" || e.outcome === "BREAKEVEN") e.status = "CLOSED";
+    else if (e.outcome === "SKIP") e.status = "SKIP";
+    else if (e.outcome === "PENDING") e.status = "OPEN";
+    else if (e.outcome === "MISSED") e.status = "EXPIRED";
+    else e.status = "CLOSED";
+  }
+  if (e.status === "OPEN" && e.entryTaken !== true) e.entryTaken = true;
+  return e;
+}
+
+function getOpenPosition() {
+  return [...tlogEntries].reverse().map(normalizeTlogStatus).find(e => e.status === "OPEN") || null;
+}
+function getActiveSignal() {
+  const now = Date.now();
+  return [...tlogEntries].reverse().map(normalizeTlogStatus)
+    .find(e => e.status === "SIGNAL" && e.expiresAt && e.expiresAt > now) || null;
+}
+function tlogPnlPct(e) {
+  if (e.pnlPct != null) return +e.pnlPct;
+  if (e.exitPrice && e.entryPrice) return (e.exitPrice - e.entryPrice) / e.entryPrice * 100;
+  if (e.status === "OPEN" && e.lastPrice && e.entryPrice) return (e.lastPrice - e.entryPrice) / e.entryPrice * 100;
+  return null;
+}
+function tlogStatusBadge(status) {
+  const key = String(status || "").toLowerCase();
+  const cls = ["signal", "watch", "open", "closed", "expired", "skip"].includes(key) ? key : "closed";
+  return `<span class="tlog-status tlog-status-${cls}">${status || "—"}</span>`;
+}
+
 function renderTlog() {
   const tbody = document.getElementById("tlogBody");
   if (!tbody) return;
+  tlogEntries.forEach(normalizeTlogStatus);
 
   if (!tlogEntries.length) {
-    tbody.innerHTML = `<tr><td colspan="13" style="color:var(--muted);text-align:center;padding:20px">No signals logged yet</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="14" style="color:var(--muted);text-align:center;padding:20px">No signals logged yet</td></tr>`;
     updateTlogStats();
+    renderOpenPosition();
     return;
   }
 
   // Sort newest first
-  const sorted = [...tlogEntries].sort((a,b) => b.id - a.id);
+  const sorted = [...tlogEntries].sort((a, b) => b.id - a.id);
 
   tbody.innerHTML = sorted.map(e => {
     const dirColor  = e.direction?.includes("CE") ? "#22c55e" : e.direction?.includes("PE") ? "#ef4444" : "#f59e0b";
+    const pnlPct    = tlogPnlPct(e);
+    const pnl       = pnlPct == null ? "—" : (pnlPct > 0 ? "+" : "") + pnlPct.toFixed(1) + "%";
+    const pnlColor  = pnlPct == null ? "var(--muted)" : pnlPct > 0 ? "#22c55e" : pnlPct < 0 ? "#ef4444" : "var(--muted2)";
+    const outcome   = e.status === "SIGNAL" ? "AWAITING"
+                    : e.status === "WATCH"  ? "WATCH"
+                    : e.status === "EXPIRED"? "MISSED"
+                    : e.status === "OPEN"   ? "LIVE"
+                    : e.outcome || "—";
     const outcomeClass = e.outcome === "WIN" ? "tlog-outcome-win"
                        : e.outcome === "LOSS" ? "tlog-outcome-loss"
                        : e.outcome === "SKIP" ? "tlog-outcome-skip"
                        : "tlog-outcome-pending";
-    const outcomeText = e.outcome || "PENDING";
-    const pnl = e.exitPrice && e.entryPrice
-      ? ((e.exitPrice - e.entryPrice) / e.entryPrice * 100).toFixed(1) + "%"
-      : "—";
-    const pnlColor = e.exitPrice && e.entryPrice
-      ? (e.exitPrice > e.entryPrice ? "#22c55e" : "#ef4444")
-      : "var(--muted)";
+
+    const entryCell = e.status === "SIGNAL"
+      ? `<input id="tlogEntry-${e.id}" type="number" step="0.05" min="0.05" value="${e.entryPrice ?? ""}" title="Edit to your actual fill, then click Take"
+          style="width:70px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:2px 5px;border-radius:4px;font-size:0.72rem;font-family:'Inter',sans-serif">`
+      : e.entryPrice
+        ? `<span style="color:var(--accent)">₹${e.entryPrice}</span>${e.entrySource ? `<div style="font-size:0.55rem;color:var(--muted)">${e.entrySource}</div>` : ""}`
+        : "—";
+
+    const exitCell = e.status === "OPEN"
+      ? `<input type="number" step="0.05" placeholder="Exit ₹" onchange="tlogUpdateExit(${e.id}, this.value)"
+          style="width:65px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:2px 5px;border-radius:4px;font-size:0.72rem;font-family:'Inter',sans-serif">`
+      : e.exitPrice
+        ? `<span style="color:${e.exitPrice > e.entryPrice ? "#22c55e" : "#ef4444"}">₹${e.exitPrice}</span>`
+        : "—";
+
+    const action = e.status === "SIGNAL"
+      ? `<button class="tlog-take-btn" onclick="tlogTakeFromRow(${e.id})" title="Take this trade at the entry shown">Take</button>
+         <button class="tlog-edit-btn" onclick="tlogDelete(${e.id})" title="Delete">✕</button>`
+      : e.status === "OPEN"
+        ? `<button class="tlog-take-btn" onclick="tlogCloseLive(${e.id})" title="Close at the latest live price">Close</button>`
+        : `<button class="tlog-edit-btn" onclick="tlogDelete(${e.id})" title="Delete">✕</button>`;
 
     return `<tr>
       <td style="color:var(--muted2);white-space:nowrap">${e.date}</td>
       <td style="color:var(--muted2)">${e.time}</td>
       <td style="color:${dirColor};font-weight:700">${e.direction || "—"}</td>
-      <td style="font-weight:700;color:${e.score >= 7 ? "#22c55e" : e.score >= 5 ? "#f59e0b" : "#ef4444"}">${e.score ?? "—"}/10</td>
+      <td style="font-weight:700;color:${e.score >= 8 ? "#22c55e" : e.score >= 6 ? "#84cc16" : e.score >= 4 ? "#f59e0b" : "#ef4444"}">${e.score ?? "—"}/10</td>
       <td style="color:var(--text)">${e.strike || "—"}</td>
-      <td style="color:var(--accent)">${e.entryPrice ? "₹"+e.entryPrice : "—"}</td>
+      <td>${entryCell}</td>
       <td><span class="vol-badge ${e.volClass || "vol-na"}">${e.volLabel?.split("—")[0]?.trim() || "—"}</span></td>
       <td style="font-size:0.68rem;color:var(--muted2)">${e.regime?.replace(/[🟢🟡🟠🔴⚪]/u,"").trim().slice(0,18) || "—"}</td>
-      <td>${e.exitPrice ? `<input type="number" value="${e.exitPrice}" onchange="tlogUpdateExit(${e.id}, this.value)"
-        style="width:65px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:2px 5px;border-radius:4px;font-size:0.72rem;font-family:'Inter',sans-serif">` : `<input type="number" placeholder="Exit ₹" onchange="tlogUpdateExit(${e.id}, this.value)"
-        style="width:65px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:2px 5px;border-radius:4px;font-size:0.72rem;font-family:'Inter',sans-serif">`}</td>
+      <td>${exitCell}</td>
       <td style="color:${pnlColor};font-weight:600">${pnl}</td>
-      <td><span class="tlog-outcome ${outcomeClass}">${outcomeText}</span></td>
-      <td><input type="text" value="${e.notes || ""}" placeholder="Add note..." onchange="tlogUpdateNotes(${e.id}, this.value)"
+      <td title="${escHtml(e.waitReason || "")}">${tlogStatusBadge(e.status)}</td>
+      <td><span class="tlog-outcome ${outcomeClass}">${outcome}</span></td>
+      <td><input type="text" value="${escHtml(e.notes || "")}" placeholder="Add note..." onchange="tlogUpdateNotes(${e.id}, this.value)"
         style="width:100px;background:var(--surface2);border:1px solid var(--border2);color:var(--text);padding:2px 5px;border-radius:4px;font-size:0.68rem;font-family:'Inter',sans-serif"></td>
-      <td><button class="tlog-edit-btn" onclick="tlogDelete(${e.id})">✕</button></td>
+      <td style="white-space:nowrap">${action}</td>
     </tr>`;
   }).join("");
 
   updateTlogStats();
+  renderOpenPosition();
 }
 
+
 function updateTlogStats() {
-  const closed = tlogEntries.filter(e => e.outcome === "WIN" || e.outcome === "LOSS");
-  const wins   = tlogEntries.filter(e => e.outcome === "WIN");
-  const losses = tlogEntries.filter(e => e.outcome === "LOSS");
-  const skipped= tlogEntries.filter(e => e.outcome === "SKIP");
+  tlogEntries.forEach(normalizeTlogStatus);
+  const closed = tlogEntries.filter(e => e.status === "CLOSED");
+  const wins   = closed.filter(e => e.outcome === "WIN");
+  const losses = closed.filter(e => e.outcome === "LOSS");
+  const skipped= tlogEntries.filter(e => e.status === "SKIP");
+  const missed = tlogEntries.filter(e => e.status === "EXPIRED");
+  const open   = tlogEntries.filter(e => e.status === "OPEN");
+  const awaiting = tlogEntries.filter(e => e.status === "SIGNAL");
   const winRate= closed.length ? Math.round(wins.length / closed.length * 100) : null;
 
   // Average P&L %
-  const pnlArr = tlogEntries
-    .filter(e => e.exitPrice && e.entryPrice)
-    .map(e => ((e.exitPrice - e.entryPrice) / e.entryPrice * 100));
+  const pnlArr = closed.map(tlogPnlPct).filter(v => v != null);
   const avgPnl = pnlArr.length ? (pnlArr.reduce((a,b)=>a+b,0) / pnlArr.length).toFixed(1) : null;
 
   // Best single trade
   const bestPnl = pnlArr.length ? Math.max(...pnlArr).toFixed(1) : null;
 
-  document.getElementById("tlog-total").textContent   = tlogEntries.length;
-  document.getElementById("tlog-wins").textContent    = wins.length;
-  document.getElementById("tlog-losses").textContent  = losses.length;
-  document.getElementById("tlog-winrate").textContent = winRate !== null ? winRate + "%" : "—";
-  document.getElementById("tlog-winrate").style.color = winRate >= 55 ? "#22c55e" : winRate >= 45 ? "#f59e0b" : "#ef4444";
-  document.getElementById("tlog-avgpnl").textContent  = avgPnl !== null ? (avgPnl > 0 ? "+" : "") + avgPnl + "%" : "—";
-  document.getElementById("tlog-avgpnl").style.color  = avgPnl > 0 ? "#22c55e" : "#ef4444";
-  document.getElementById("tlog-best").textContent    = bestPnl !== null ? "+" + bestPnl + "%" : "—";
-  document.getElementById("tlog-skipped").textContent = skipped.length;
+  // Profit factor and average R (assuming 30% premium risk per trade)
+  const grossWin  = pnlArr.filter(v => v > 0).reduce((a,b) => a + b, 0);
+  const grossLoss = Math.abs(pnlArr.filter(v => v < 0).reduce((a,b) => a + b, 0));
+  const pf = grossLoss > 0 ? (grossWin / grossLoss).toFixed(2) : (grossWin > 0 ? "∞" : "—");
+  const avgR = avgPnl != null ? (avgPnl / 30).toFixed(2) : null;
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set("tlog-total",   tlogEntries.length);
+  set("tlog-open",    open.length);
+  set("tlog-wins",    wins.length);
+  set("tlog-losses",  losses.length);
+  set("tlog-winrate", winRate !== null ? winRate + "%" : "—");
+  set("tlog-avgpnl",  avgPnl !== null ? (avgPnl > 0 ? "+" : "") + avgPnl + "%" : "—");
+  set("tlog-avgr",    avgR !== null ? (avgR > 0 ? "+" : "") + avgR + "R" : "—");
+  set("tlog-pf",      pf);
+  set("tlog-best",    bestPnl !== null ? "+" + bestPnl + "%" : "—");
+  set("tlog-skipped", skipped.length);
+  set("tlog-missed",  missed.length);
+  set("tlog-winrate", winRate !== null ? winRate + "%" : "—");
+
+  const wrEl = document.getElementById("tlog-winrate");
+  if (wrEl) wrEl.style.color = winRate >= 55 ? "#22c55e" : winRate >= 45 ? "#f59e0b" : "#ef4444";
+  const avgEl = document.getElementById("tlog-avgpnl");
+  if (avgEl) avgEl.style.color = avgPnl > 0 ? "#22c55e" : avgPnl < 0 ? "#ef4444" : "var(--muted2)";
+
+  // Stats by grade bucket — this is where the journal earns its keep.
+  const buckets = [
+    { key: "A/A+", min: 8,  color: "#22c55e" },
+    { key: "B",    min: 6,  color: "#84cc16" },
+    { key: "C/D",  min: 0,  color: "#f59e0b" },
+  ];
+  const gradeEl = document.getElementById("tlogByGrade");
+  if (gradeEl) {
+    if (!closed.length) {
+      gradeEl.textContent = "Grade stats will appear after closed trades.";
+    } else {
+      gradeEl.innerHTML = buckets.map((b, i) => {
+        const rows = closed.filter(e => {
+          const s = e.score ?? 0;
+          if (i === 0) return s >= b.min;
+          if (i === 1) return s >= b.min && s < 8;
+          return s < 6;
+        });
+        if (!rows.length) return `<span class="gs" style="color:var(--muted)">${b.key}: —</span>`;
+        const w = rows.filter(e => e.outcome === "WIN").length;
+        const wr = Math.round(w / rows.length * 100);
+        const avg = rows.map(tlogPnlPct).filter(v => v != null);
+        const ap = avg.length ? (avg.reduce((x,y)=>x+y,0)/avg.length).toFixed(1) : "—";
+        return `<span class="gs"><strong style="color:${b.color}">${b.key}</strong> ${wr}% win · ${ap}% avg · n=${rows.length}</span>`;
+      }).join("");
+    }
+  }
+  if (awaiting.length) {
+    const el = document.getElementById("tlog-open");
+    if (el) el.title = `${awaiting.length} signal(s) awaiting your entry`;
+  }
 }
+
 
 async function tlogAddEntry(sig, inputs, prob) {
   const now  = new Date(new Date().toLocaleString("en-US",{timeZone:"Asia/Kolkata"}));
@@ -4444,15 +5384,33 @@ async function tlogAddEntry(sig, inputs, prob) {
   const vol = await computeVolumeConfirmation();
 
   // Prefer the live NSE mid-price for the record; fall back to the BS estimate.
+  // This is the PLANNED entry. It is not a fill until the user confirms.
   let entryPrice = sig.entryMid || null;
-  let entrySource = sig.entryLive ? "NSE" : "BS estimate";
+  let entrySource = sig.entryLive ? "NSE planned" : "BS planned";
   try {
     const live = await fetchRealOptionPrice(sig.primaryStrike, sig.type);
-    if (live?.midPrice) { entryPrice = live.midPrice; entrySource = "NSE"; }
+    if (live?.midPrice) { entryPrice = live.midPrice; entrySource = "NSE planned"; }
   } catch {}
 
+  // Signal lifecycle: at most one actionable signal and one open trade.
+  const open   = getOpenPosition();
+  const active = getActiveSignal();
+  let status, outcome, waitReason = null, expiresAt = null;
+  if (sig.direction === "SKIP" || !sig.type) {
+    status = "SKIP"; outcome = "SKIP"; waitReason = sig.waitReason || "No trade";
+  } else if (sig.actionable === false) {
+    status = "WATCH"; outcome = "WATCH"; waitReason = sig.waitReason || "Trigger not confirmed";
+  } else if (open) {
+    status = "WATCH"; outcome = "WATCH"; waitReason = "Position already open — watch only";
+  } else if (active) {
+    status = "WATCH"; outcome = "WATCH"; waitReason = "Another signal is still valid — watch only";
+  } else {
+    status = "SIGNAL"; outcome = "SIGNAL";
+    expiresAt = Date.now() + SIGNAL_VALIDITY_MIN * 60000;
+  }
+
   const entry = {
-    id:         Date.now(),
+    id:         Date.now() + Math.floor(Math.random() * 1000),
     date, time,
     direction:  sig.direction,
     score:      prob?.score ?? null,
@@ -4463,10 +5421,31 @@ async function tlogAddEntry(sig, inputs, prob) {
     event:      prob?.event?.label || null,
     confidence: sig.confidence,
     strike:     sig.primaryStrike ? `${sig.primaryStrike} ${sig.type}` : `${sig.atm} ${sig.type || ""}`,
+    strikeValue: sig.primaryStrike ?? sig.atm ?? null,
+    strikeType:  sig.type ?? null,
     entryPrice,
     entrySource,
+    plannedEntry: entryPrice,
+    slPrice:      sig.slPrice ?? null,
+    t1Price:      sig.t1Price ?? null,
+    t2Price:      sig.t2Price ?? null,
+    t3Price:      sig.t3Price ?? null,
+    plannedSl:    sig.slPrice ?? null,
+    plannedT1:    sig.t1Price ?? null,
+    plannedT2:    sig.t2Price ?? null,
+    plannedT3:    sig.t3Price ?? null,
     exitPrice:  null,
-    outcome:    sig.direction === "SKIP" ? "SKIP" : "PENDING",
+    outcome,
+    status,
+    expiresAt,
+    waitReason,
+    entryTaken: false,
+    entryAt:    null,
+    lastPrice:  entryPrice,
+    lastUpdate: null,
+    mfe: 0,
+    mae: 0,
+    partials: [],
     volRatio:   vol.volRatio,
     volLabel:   vol.volLabel,
     volClass:   vol.volClass,
@@ -4475,24 +5454,265 @@ async function tlogAddEntry(sig, inputs, prob) {
     vix:        inputs.vix,
     pcr:        inputs.pcr,
     spot:       inputs.spot,
-    notes:      "",
+    notes:      waitReason ? `⏳ ${waitReason}` : "",
   };
 
   tlogEntries.push(entry);
   renderTlog();
   await tlogSaveAll();
+  return entry;
 }
+
+async function tlogConfirmEntry(id, price) {
+  const entry = tlogEntries.find(e => e.id === id);
+  if (!entry) return false;
+  normalizeTlogStatus(entry);
+  if (entry.status === "OPEN") return true;
+  const open = getOpenPosition();
+  if (open && open.id !== id) {
+    alert("A position is already open. Close it before taking another.");
+    return false;
+  }
+  const px = parseFloat(price);
+  if (!(px > 0)) return false;
+
+  // Planned levels are frozen here. The fill changes P&L and actual R:R,
+  // but never recalculates the stop or targets.
+  entry.plannedEntry = entry.plannedEntry ?? entry.entryPrice;
+  entry.plannedSl    = entry.plannedSl ?? entry.slPrice;
+  entry.plannedT1    = entry.plannedT1 ?? entry.t1Price;
+  entry.plannedT2    = entry.plannedT2 ?? entry.t2Price;
+  entry.plannedT3    = entry.plannedT3 ?? entry.t3Price;
+  if (!(entry.slPrice > 0) && entry.entryPrice > 0) entry.slPrice = +(entry.entryPrice * 0.70).toFixed(2);
+  if (!(entry.t1Price > 0) && entry.entryPrice > 0) entry.t1Price = +(entry.entryPrice * 1.50).toFixed(2);
+  if (!(entry.t2Price > 0) && entry.entryPrice > 0) entry.t2Price = +(entry.entryPrice * 2.00).toFixed(2);
+  if (!(entry.t3Price > 0) && entry.entryPrice > 0) entry.t3Price = +(entry.entryPrice * 2.80).toFixed(2);
+
+  entry.entryPrice = +px.toFixed(2);
+  entry.entrySource = "manual fill";
+  entry.entryTaken  = true;
+  entry.status      = "OPEN";
+  entry.outcome     = "PENDING";
+  entry.entryAt     = Date.now();
+  entry.expiresAt   = null;
+  entry.waitReason  = null;
+  entry.lastPrice   = entry.entryPrice;
+  entry.lastUpdate  = Date.now();
+  entry.mfe         = entry.entryPrice;
+  entry.mae         = entry.entryPrice;
+  entry.partials    = [];
+  const slip = entry.plannedEntry > 0 ? ((entry.entryPrice - entry.plannedEntry) / entry.plannedEntry * 100) : 0;
+  entry.notes = `Fill ₹${entry.entryPrice} vs planned ₹${entry.plannedEntry}${Math.abs(slip) > 3 ? ` (${slip > 0 ? "+" : ""}${slip.toFixed(1)}% late)` : ""} · SL/T1 frozen at plan`;
+
+  renderTlog();
+  renderOpenPosition();
+  await tlogSaveAll();
+  return true;
+}
+
+async function tlogTakeFromRow(id) {
+  const input = document.getElementById(`tlogEntry-${id}`);
+  const price = parseFloat(input?.value);
+  if (!(price > 0)) { alert("Enter your actual fill price first."); return; }
+  const ok = await tlogConfirmEntry(id, price);
+  if (ok && currentSignal) {
+    currentSignal.entryLocked = true;
+    renderActualEntryNote(currentSignal);
+    updateSignalEntryControls();
+  }
+}
+
+function renderOpenPosition() {
+  const el = document.getElementById("openPosPanel");
+  if (!el) return;
+  const open = getOpenPosition();
+  if (!open) { el.style.display = "none"; el.innerHTML = ""; return; }
+
+  const px = open.lastPrice || open.entryPrice;
+  const pnlPct = px && open.entryPrice ? (px - open.entryPrice) / open.entryPrice * 100 : null;
+  const color = pnlPct == null ? "var(--muted)" : pnlPct >= 0 ? "#22c55e" : "#ef4444";
+  const ageMin = open.entryAt ? Math.round((Date.now() - open.entryAt) / 60000) : null;
+  const partials = (open.partials || []).map(p => `T${p.weight === 0.5 ? 1 : 2} @ ₹${p.price}`).join(" · ") || "none";
+
+  el.className = "open-pos" + (pnlPct < 0 ? " loss" : "");
+  el.style.display = "block";
+  el.innerHTML = `
+    <div class="open-pos-head">
+      <div class="open-pos-title">🟢 OPEN POSITION · ${open.direction} ${open.strike || ""}</div>
+      <div style="font-size:0.7rem;color:var(--muted2)">${open.entrySource || ""}${ageMin != null ? ` · ${ageMin} min held` : ""}</div>
+    </div>
+    <div class="open-pos-grid">
+      <div class="open-pos-cell"><div class="k">Entry</div><div class="v">₹${open.entryPrice}</div></div>
+      <div class="open-pos-cell"><div class="k">Live</div><div class="v">₹${px ?? "—"}</div></div>
+      <div class="open-pos-cell"><div class="k">P&L</div><div class="v" style="color:${color}">${pnlPct == null ? "—" : (pnlPct > 0 ? "+" : "") + pnlPct.toFixed(1) + "%"}</div></div>
+      <div class="open-pos-cell"><div class="k">SL (frozen)</div><div class="v" style="color:#ef4444">₹${open.slPrice ?? "—"}</div></div>
+      <div class="open-pos-cell"><div class="k">T1 / T2 / T3</div><div class="v">₹${open.t1Price ?? "—"} / ₹${open.t2Price ?? "—"} / ₹${open.t3Price ?? "—"}</div></div>
+      <div class="open-pos-cell"><div class="k">MFE / MAE</div><div class="v">₹${open.mfe || "—"} / ₹${open.mae || "—"}</div></div>
+      <div class="open-pos-cell"><div class="k">Partials</div><div class="v" style="font-size:0.68rem">${partials}</div></div>
+      <div class="open-pos-cell"><div class="k">Planned entry</div><div class="v">₹${open.plannedEntry ?? "—"}</div></div>
+    </div>
+    <div class="open-pos-actions" style="margin-top:7px">
+      <button class="tlog-take-btn" onclick="tlogCloseLive(${open.id})">Close at live (₹${px ?? "—"})</button>
+      <input type="number" step="0.05" placeholder="Exit ₹" onchange="tlogUpdateExit(${open.id}, this.value)">
+      <span style="font-size:0.62rem;color:var(--muted)">Time stop 120 min or 15:15 IST · SL/T1/T2/T3 are planned, not recalculated</span>
+    </div>`;
+}
+
+async function tlogClosePosition(id, exitPrice, reason) {
+  const entry = tlogEntries.find(e => e.id === id);
+  if (!entry || !entry.entryPrice) return;
+  const px = parseFloat(exitPrice);
+  if (!(px > 0)) return;
+
+  const parts = entry.partials || [];
+  const used = parts.reduce((s, p) => s + (p.weight || 0), 0);
+  const remain = Math.max(0, 1 - used);
+  let total = parts.reduce((s, p) => s + (p.weight || 0) * ((p.price - entry.entryPrice) / entry.entryPrice), 0);
+  total += remain * ((px - entry.entryPrice) / entry.entryPrice);
+
+  entry.exitPrice  = +px.toFixed(2);
+  entry.exitAt     = Date.now();
+  entry.exitReason = reason || "MANUAL";
+  entry.pnlPct     = +(total * 100).toFixed(2);
+  entry.status     = "CLOSED";
+  entry.outcome    = entry.pnlPct > 0 ? "WIN" : entry.pnlPct < 0 ? "LOSS" : "BREAKEVEN";
+  entry.notes      = entry.notes || `Closed ${entry.exitReason} at ₹${entry.exitPrice}`;
+
+  renderTlog();
+  renderOpenPosition();
+  await tlogSaveAll();
+}
+
+async function tlogCloseLive(id) {
+  const entry = tlogEntries.find(e => e.id === id);
+  if (!entry) return;
+  const px = entry.lastPrice || entry.entryPrice;
+  if (!(px > 0)) { alert("No live price yet — enter the exit price manually."); return; }
+  await tlogClosePosition(id, px, "MANUAL-LIVE");
+}
+
+function tlogExpireSignals() {
+  const now = Date.now();
+  let changed = false;
+  tlogEntries.forEach(e => {
+    normalizeTlogStatus(e);
+    if (e.status === "SIGNAL" && e.expiresAt && e.expiresAt < now) {
+      e.status = "EXPIRED";
+      e.outcome = "MISSED";
+      e.waitReason = "15-minute entry window expired — scrapped";
+      changed = true;
+    }
+  });
+  if (changed) {
+    renderTlog();
+    tlogSaveAll().catch(() => {});
+  }
+}
+
+async function tlogSweepStalePositions() {
+  const today = new Date().toLocaleDateString("en-IN",{day:"2-digit",month:"short",year:"numeric"});
+  let changed = false;
+  tlogEntries.forEach(e => {
+    normalizeTlogStatus(e);
+    if (e.status === "OPEN" && e.date && e.date !== today) {
+      const px = e.lastPrice || e.entryPrice;
+      e.exitPrice = px;
+      e.exitAt = Date.now();
+      e.exitReason = "STALE/EXPIRY";
+      e.pnlPct = e.entryPrice ? +(((px - e.entryPrice) / e.entryPrice) * 100).toFixed(2) : 0;
+      e.status = "CLOSED";
+      e.outcome = e.pnlPct > 0 ? "WIN" : e.pnlPct < 0 ? "LOSS" : "BREAKEVEN";
+      e.notes = (e.notes ? e.notes + " · " : "") + "Auto-closed stale position from a previous session";
+      changed = true;
+    }
+  });
+  if (changed) {
+    tlogLocalWrite(tlogEntries);
+    renderTlog();
+    renderOpenPosition();
+  }
+}
+
+let _trackingPosition = false;
+async function trackOpenPosition() {
+  if (_trackingPosition) return;
+  const open = getOpenPosition();
+  if (!open) return;
+  const sess = getMarketSession();
+  if (!sess.isTradingDay) return;
+
+  _trackingPosition = true;
+  try {
+    const type = open.strikeType || (String(open.strike).includes("PE") ? "PE" : "CE");
+    const strike = open.strikeValue || parseInt(open.strike, 10);
+    if (!(strike > 0) || !type) return;
+    const ep = await fetchRealOptionPrice(strike, type);
+    if (!ep?.midPrice) return;
+
+    const px = ep.midPrice;
+    open.lastPrice = px;
+    open.lastUpdate = Date.now();
+    open.mfe = Math.max(open.mfe || 0, px);
+    open.mae = open.mae ? Math.min(open.mae, px) : px;
+
+    // Partial exits: 50% at T1, 30% at T2, 20% runner.
+    if (open.t1Price > 0 && !open.t1Hit && px >= open.t1Price) {
+      open.t1Hit = true;
+      open.partials = open.partials || [];
+      open.partials.push({ price: open.t1Price, weight: 0.5, at: Date.now() });
+      open.slPrice = open.entryPrice; // move stop to cost after T1
+      open.notes = (open.notes ? open.notes + " · " : "") + `T1 hit ₹${open.t1Price} (50%), SL → cost`;
+    }
+    if (open.t2Price > 0 && !open.t2Hit && px >= open.t2Price) {
+      open.t2Hit = true;
+      open.partials = open.partials || [];
+      open.partials.push({ price: open.t2Price, weight: 0.3, at: Date.now() });
+      open.notes = (open.notes ? open.notes + " · " : "") + `T2 hit ₹${open.t2Price} (30%)`;
+    }
+    if (open.t3Price > 0 && px >= open.t3Price) {
+      await tlogClosePosition(open.id, open.t3Price, "T3");
+      return;
+    }
+    if (open.slPrice > 0 && px <= open.slPrice) {
+      await tlogClosePosition(open.id, open.slPrice, open.t1Hit ? "SL-BE" : "SL");
+      return;
+    }
+    const ageMin = open.entryAt ? (Date.now() - open.entryAt) / 60000 : 0;
+    if (_istMinsNow() >= HARD_EXIT_MINS) {
+      await tlogClosePosition(open.id, px, "TIME-15:15");
+      return;
+    }
+    if (ageMin >= MAX_HOLD_MIN) {
+      await tlogClosePosition(open.id, px, "TIME-120m");
+      return;
+    }
+
+    // Routine poll: local persistence only; GitHub sync on events/close.
+    tlogLocalWrite(tlogEntries);
+    renderOpenPosition();
+    renderTlog();
+  } catch (e) {
+    console.log("Position tracking failed:", e.message);
+  } finally {
+    _trackingPosition = false;
+  }
+}
+
 
 async function tlogUpdateExit(id, exitPriceStr) {
   const exitPrice = parseFloat(exitPriceStr);
   if (!exitPrice || isNaN(exitPrice)) return;
   const entry = tlogEntries.find(e => e.id === id);
   if (!entry) return;
+  normalizeTlogStatus(entry);
+  if (entry.status === "OPEN") {
+    return tlogClosePosition(id, exitPrice, "MANUAL");
+  }
   entry.exitPrice = exitPrice;
-  // Auto-determine outcome
+  entry.status = "CLOSED";
   if (entry.entryPrice) {
-    const pnlPct = (exitPrice - entry.entryPrice) / entry.entryPrice * 100;
-    entry.outcome = pnlPct > 0 ? "WIN" : "LOSS";
+    entry.pnlPct = +(((exitPrice - entry.entryPrice) / entry.entryPrice) * 100).toFixed(2);
+    entry.outcome = entry.pnlPct > 0 ? "WIN" : entry.pnlPct < 0 ? "LOSS" : "BREAKEVEN";
   }
   renderTlog();
   await tlogSaveAll();
@@ -4521,16 +5741,16 @@ async function tlogSaveAll() {
 }
 
 function tlogExportCSV() {
-  const headers = ["Date","Time","Direction","Score","Strike","Entry","Exit","P&L%","Outcome","Vol","VIX","IVR","PCR","Regime","Notes"];
+  const headers = ["Date","Time","Direction","Setup","Strike","Status","PlannedEntry","ActualEntry","Exit","P&L%","RMultiple","MFE","MAE","ExitReason","Outcome","Vol","VIX","IVR","PCR","Regime","Notes"];
   const rows = tlogEntries.map(e => {
-    const pnl = e.exitPrice && e.entryPrice
-      ? ((e.exitPrice - e.entryPrice) / e.entryPrice * 100).toFixed(1)
-      : "";
-    return [e.date, e.time, e.direction, e.score, e.strike,
-            e.entryPrice, e.exitPrice, pnl, e.outcome,
-            e.volLabel?.split("—")[0]?.trim(),
-            e.vix, e.ivRank, e.pcr, e.regime?.replace(/[^\w\s]/gu,""), e.notes
-    ].map(v => `"${v ?? ""}"`).join(",");
+    const pnl = e.pnlPct != null ? (+e.pnlPct).toFixed(1)
+      : (e.exitPrice && e.entryPrice ? ((e.exitPrice - e.entryPrice) / e.entryPrice * 100).toFixed(1) : "");
+    const r = pnl !== "" ? (parseFloat(pnl) / 30).toFixed(2) : "";
+    return [e.date, e.time, e.direction, e.score, e.strike, e.status,
+            e.plannedEntry, e.entryPrice, e.exitPrice, pnl, r, e.mfe, e.mae, e.exitReason,
+            e.outcome, e.volLabel?.split("—")[0]?.trim(), e.vix, e.ivRank, e.pcr,
+            e.regime?.replace(/[^\w\s]/gu,""), e.notes
+    ].map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(",");
   });
   const csv  = [headers.join(","), ...rows].join("\n");
   const blob = new Blob([csv], {type:"text/csv"});
@@ -4542,17 +5762,21 @@ function tlogExportCSV() {
 
 function addSignalLog(time, sig, inputs) {
   const logEl = document.getElementById("sigLog");
-  const dirColor  = sig.type === "CE" ? "#22c55e" : sig.type === "PE" ? "#ef4444" : "#f59e0b";
+  if (!logEl) return;
+  const waiting = sig.actionable === false && !!sig.type;
+  const dirColor  = waiting ? "#f59e0b" : sig.type === "CE" ? "#22c55e" : sig.type === "PE" ? "#ef4444" : "#f59e0b";
   const probColor = sig.prob?.color || "#f59e0b";
+  const label = waiting ? `⏳ WAIT (${sig.type} bias)` : `${sig.emoji} ${sig.direction}`;
   const row = document.createElement("div");
   row.className = "sig-log-row";
   row.innerHTML = `
     <span class="sig-log-time">${time}</span>
-    <span class="sig-log-dir" style="color:${dirColor}">${sig.emoji} ${sig.direction}</span>
+    <span class="sig-log-dir" style="color:${dirColor}">${label}</span>
     <span style="color:${probColor};font-weight:700;font-size:0.75rem">${sig.prob?.score ?? "—"}/10</span>
     <span style="color:var(--muted2);font-size:0.68rem">${sig.confidence}</span>
-    <span class="sig-log-detail">${sig.primaryStrike ?? sig.atm} ${sig.type ?? ""} · VIX ${inputs.vix.toFixed(1)} · PCR ${inputs.pcr.toFixed(2)}</span>`;
-  if (logEl.querySelector("[style*='No signals']")) logEl.innerHTML = "";
+    <span class="sig-log-detail">${sig.primaryStrike ?? sig.atm} ${sig.type ?? ""} · VIX ${inputs.vix.toFixed(1)} · PCR ${inputs.pcr.toFixed(2)}${waiting ? " · " + escHtml(sig.waitReason || "not confirmed") : ""}</span>`;
+  const placeholder = logEl.querySelector("[style*='No signals']");
+  if (placeholder) logEl.innerHTML = "";
   logEl.insertBefore(row, logEl.firstChild);
 }
 
@@ -4607,6 +5831,7 @@ async function toggleNotifications() {
 // logEvent=false on page load (render only); true for scheduled signal minutes.
 async function runSignalEngine(force = false, logEvent = false) {
   if (!force && !isSignalTime()) return;
+  if (!force && !getMarketSession().isTradingDay) return;
 
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
   const hhmm = now.getHours().toString().padStart(2,"0") + ":" + now.getMinutes().toString().padStart(2,"0");
@@ -4695,8 +5920,11 @@ async function runSignalEngine(force = false, logEvent = false) {
     // Trend filter + event risk (used by computeSignal and setup quality)
     const trend     = trendState(spot, ictx);
     const eventRisk = getEventRisk();
+    // 5m confirmation + day-type classifier
+    const trigger   = await getTriggerContext().catch(() => null);
+    const dayType   = classifyDayType(ictx, getTargetExpiry());
 
-    const inputs = { spot, prevClose, dayChg, dayChgPct, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty: srCtx.srScorePenalty, volScore: volData.volScore, volLabel: volData.volLabel, trend, sr: srCtx, event: eventRisk };
+    const inputs = { spot, prevClose, dayChg, dayChgPct, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty: srCtx.srScorePenalty, volScore: volData.volScore, volLabel: volData.volLabel, trend, trigger, dayType, sr: srCtx, event: eventRisk };
     const sig = computeSignal(inputs);
     renderSignal(sig, inputs, logEvent);
 
@@ -4713,6 +5941,11 @@ function initSignalEngine() {
   document.getElementById("sigExpiryLabel").textContent = label;
   document.getElementById("sigNextTime").textContent = getNextSignalTime();
   signalCheckInterval = setInterval(() => runSignalEngine(false, true), 60000);
+  // Lifecycle timers: expire untaken signals every minute; track the open
+  // position every 2 minutes; force a time-stop check at 15:15.
+  setInterval(tlogExpireSignals, 60000);
+  setInterval(() => { if (getMarketSession().isTradingDay) trackOpenPosition(); }, 120000);
+  setTimeout(() => { if (getMarketSession().isTradingDay) trackOpenPosition(); }, 15000);
   // Render immediately (no logging) and refresh once after the other feeds settle
   runSignalEngine(true, false);
   setTimeout(() => runSignalEngine(true, false), 12000);
@@ -4971,8 +6204,10 @@ async function fetchRealOptionPrice(strike, type) {
     return {
       midPrice: mid,
       bid, ask,
+      strike, type,
       iv: parseFloat(leg.impliedVolatility || 0),
       oi: parseInt(leg.openInterest || 0),
+      volume: parseInt(leg.totalTradedVolume || leg.volume || 0),
       slPrice: Math.max(0.05, Math.round(mid * 0.70 * 20) / 20),
       t1Price: Math.round(mid * 1.5 * 20) / 20,
       t2Price: Math.round(mid * 2.0 * 20) / 20,
@@ -5005,29 +6240,205 @@ async function updateEntryPriceFromNSE(sig, inputs) {
     document.getElementById("sigT3").style.color = "#22c55e";
     document.getElementById("sigSL").textContent = `🛑 SL: Exit at ₹${ep.slPrice} · Entry ~₹${ep.midPrice} (Live NSE) · Max loss ~₹${Math.round((ep.midPrice - ep.slPrice) * NIFTY_LOT_SIZE)} per lot`;
 
-    // Update entry note with live data source label
-    document.getElementById("sigEntryNote").innerHTML =
-      `<strong style="color:var(--green)">✓ Live NSE Price</strong> · Bid ₹${ep.bid} / Ask ₹${ep.ask} · IV: ${ep.iv?.toFixed(1) || "—"}% · OI: ${ep.oi?.toLocaleString("en-IN") || "—"} ` +
-      `<span style="color:var(--muted)">· Do not chase above ₹${(ep.ask * 1.05).toFixed(1)}</span>`;
-
     // Store real entry price on sig for trading log
     sig.entryMid   = ep.midPrice;
     sig.slPrice    = ep.slPrice;
     sig.t1Price    = ep.t1Price;
+    sig.t2Price    = ep.t2Price;
+    sig.t3Price    = ep.t3Price;
     sig.entryLive  = true;
 
-    // Re-grade the setup now that R:R uses the live premium
+    // Prefill the editable fill with the live price unless the user is typing.
+    const entryBox = document.getElementById("sigEntryInput");
+    if (entryBox && !sig.entryLocked && document.activeElement !== entryBox) {
+      entryBox.value = sig.entryMid;
+    }
+
+    // ── Option-quality gate ────────────────────────────────────────────
+    const q = assessOptionQuality(ep, inputs.spot, sig.expiry?.daysToExpiry ?? 5);
+    sig.optionQ = q;
+
+    let em = null;
+    try { em = await fetchExpectedMove(inputs.spot, sig.expiry || getTargetExpiry()); } catch {}
+    if (em) {
+      sig.expMove = em;
+      const delta = Math.max(0.2, q.delta || 0.5);
+      const requiredMove = Math.max(0, (ep.t1Price - ep.midPrice) / delta);
+      sig.emRatio = +(requiredMove / Math.max(1, em.daily)).toFixed(2);
+    }
+
+    // Update the quality / expected-move input rows
+    const siOpt = document.getElementById("si-optq");
+    if (siOpt) {
+      siOpt.textContent = q.ok ? `✓ Δ${q.delta} · OI ${fmtVol(q.oi)}` : `✕ ${q.summary}`;
+      siOpt.style.color = q.ok ? "#22c55e" : "#ef4444";
+    }
+    const siEm = document.getElementById("si-em");
+    if (siEm) {
+      siEm.textContent = em ? `±${Math.round(em.daily)} pts/day` : "n/a";
+      siEm.style.color = sig.emRatio > 1.2 ? "#ef4444" : sig.emRatio > 0.8 ? "#f59e0b" : "#22c55e";
+    }
+
+    const qNote = q.ok
+      ? `✓ Option quality OK · Δ ${q.delta} · spread ${q.spreadPct ?? "—"}% · OI ${fmtVol(q.oi)}`
+      : `✕ Option quality: ${q.summary}`;
+    const emNote = (em && sig.emRatio != null)
+      ? ` · T1 needs ${sig.emRatio.toFixed(2)}× daily EM (±${Math.round(em.daily)} pts)`
+      : "";
+    document.getElementById("sigEntryNote").innerHTML =
+      `<strong style="color:var(--green)">✓ Live NSE Price</strong> · Bid ₹${ep.bid} / Ask ₹${ep.ask} · IV: ${ep.iv?.toFixed(1) || "—"}% · OI: ${ep.oi?.toLocaleString("en-IN") || "—"} ` +
+      `<span style="color:var(--muted)">· Do not chase above ₹${(ep.ask * 1.05).toFixed(1)}</span>` +
+      `<br><span style="color:${q.ok ? "var(--muted2)" : "#ef4444"}">${qNote}${emNote}</span>`;
+
+    // Option quality and expected move can veto an otherwise-good signal.
+    let gate = "";
+    if (!q.ok) {
+      gate = `Option quality blocks entry: ${q.summary}`;
+    } else if (sig.emRatio > 1.2) {
+      gate = `T1 needs ${sig.emRatio.toFixed(2)}× the daily expected move — target unrealistic`;
+    }
+    if (gate) {
+      sig.actionable = false;
+      sig.waitReason = sig.waitReason ? `${sig.waitReason}; ${gate}` : gate;
+      const card = document.getElementById("sigCard");
+      if (card) card.className = "signal-card wait";
+      const dir = document.getElementById("sigDirection");
+      if (dir) { dir.textContent = `⏳ WAIT — ${sig.type} bias`; dir.style.color = "#f59e0b"; }
+      const sub = document.getElementById("sigSubtitle");
+      if (sub) sub.textContent = sig.waitReason;
+      const wb = document.getElementById("sigWaitBanner");
+      if (wb) { wb.style.display = "block"; wb.textContent = `⏳ ${gate} — not executable.`; }
+      const badge = document.getElementById("sigConfBadge");
+      if (badge) { badge.textContent = "● WATCH ONLY"; badge.className = "sig-confidence conf-medium"; }
+      const validity = document.getElementById("sigEntryValidity");
+      if (validity) validity.textContent = "WAIT — not executable";
+      const confirm = document.getElementById("sigConfirmBtn");
+      if (confirm) confirm.disabled = true;
+      const liveBtn = document.getElementById("sigUseLiveBtn");
+      if (liveBtn) liveBtn.disabled = true;
+    }
+
+    // Re-grade the setup now that R:R, option quality and expected move are live
     if (sig.probCtx) {
       sig.probCtx.rr = computeTradeRR(sig, inputs);
+      sig.probCtx.option = q;
+      sig.probCtx.emRatio = sig.emRatio ?? null;
       const p = computeSetupQuality(sig, inputs, sig.probCtx);
       renderProbabilityScore(p);
       sig.prob = p;
     }
 
+    renderActualEntryNote(sig);
+    updateSignalEntryControls();
+
   } catch(e) {
     console.log("Real option price fetch failed:", e.message);
   }
 }
+
+function renderActualEntryNote(sig) {
+  const note = document.getElementById("sigActualNote");
+  const input = document.getElementById("sigEntryInput");
+  if (!note || !input || !sig?.type) return;
+  const open = tlogEntries.find(e =>
+    e.status === "OPEN" &&
+    Number(e.strikeValue) === Number(sig.primaryStrike) &&
+    (e.strikeType || "") === (sig.type || "")
+  );
+  const actual  = open?.entryPrice || parseFloat(input.value) || sig.entryMid;
+  const planned = sig.entryMid || actual;
+  const sl      = open?.slPrice ?? sig.slPrice;
+  const t1      = open?.t1Price ?? sig.t1Price;
+  if (!(actual > 0) || !(sl > 0) || !(t1 > 0)) {
+    note.textContent = "Enter the price you actually paid. SL and targets stay at the planned levels.";
+    return;
+  }
+  const actualRR  = (t1 - actual) / Math.max(0.01, actual - sl);
+  const plannedRR = (t1 - planned) / Math.max(0.01, planned - sl);
+  const maxLoss   = Math.max(0, (actual - sl) * NIFTY_LOT_SIZE);
+  const awayPct   = planned > 0 ? Math.abs(actual - planned) / planned * 100 : 0;
+
+  let html = `Actual R:R <strong>1:${actualRR.toFixed(2)}</strong> (planned 1:${plannedRR.toFixed(2)}) · Max loss ₹${Math.round(maxLoss)}/lot · SL ₹${sl} / T1 ₹${t1} unchanged`;
+  if (awayPct > 3) {
+    html += `<br><span style="color:#f59e0b">⚠ Late/chase entry: fill is ${awayPct.toFixed(1)}% away from planned ₹${planned}. Consider skipping.</span>`;
+  }
+  if (open) {
+    html += `<br><span style="color:#22c55e">✓ Position open at ₹${open.entryPrice}. Manage it in the position panel.</span>`;
+  }
+  note.innerHTML = html;
+}
+
+function updateSignalEntryControls() {
+  const sig = currentSignal;
+  if (!sig?.type) return;
+  const open = getOpenPosition();
+  const actionable = sig.actionable !== false;
+  const input = document.getElementById("sigEntryInput");
+  const confirm = document.getElementById("sigConfirmBtn");
+  const live = document.getElementById("sigUseLiveBtn");
+  const validity = document.getElementById("sigEntryValidity");
+  if (input) input.disabled = !actionable || !!open;
+  if (confirm) confirm.disabled = !actionable || !!open;
+  if (live) live.disabled = !actionable;
+  if (validity) {
+    validity.textContent = open
+      ? "Position already open"
+      : actionable
+        ? `Valid ${SIGNAL_VALIDITY_MIN} min`
+        : "WAIT — not executable";
+  }
+  renderActualEntryNote(sig);
+}
+
+function useLiveSignalEntry() {
+  const sig = currentSignal;
+  if (!sig?.entryMid) return;
+  const input = document.getElementById("sigEntryInput");
+  if (input) {
+    input.value = sig.entryMid;
+    renderActualEntryNote(sig);
+  }
+}
+
+async function confirmSignalEntry() {
+  const sig = currentSignal, inputs = currentSignalInputs;
+  if (!sig?.type) return;
+  if (sig.actionable === false) {
+    alert("Wait-only signal: " + (sig.waitReason || "trigger not confirmed"));
+    return;
+  }
+  if (getOpenPosition()) {
+    alert("A position is already open. Close it before taking another.");
+    return;
+  }
+  const price = parseFloat(document.getElementById("sigEntryInput")?.value);
+  if (!(price > 0)) {
+    alert("Enter the actual premium you paid for this option.");
+    return;
+  }
+
+  let entry = tlogEntries.find(e => e.id === currentSignalTlogId);
+  if (!entry && currentSignalAddPromise) {
+    entry = await currentSignalAddPromise;
+    if (entry) currentSignalTlogId = entry.id;
+  }
+  if (!entry) {
+    entry = await tlogAddEntry(sig, inputs, sig.prob);
+    if (entry) currentSignalTlogId = entry.id;
+  }
+  if (!entry) { alert("Could not create a trading-log entry."); return; }
+  if (entry.status === "WATCH" || entry.status === "EXPIRED" || entry.status === "SKIP") {
+    alert(entry.waitReason || "This signal is watch-only and cannot be taken.");
+    return;
+  }
+  const ok = await tlogConfirmEntry(entry.id, price);
+  if (ok) {
+    sig.entryLocked = true;
+    renderActualEntryNote(sig);
+    updateSignalEntryControls();
+  }
+}
+
 
 /* ─── DAILY RESET ─── */
 // Auto-resets intraday data at market close (15:31 IST)
@@ -5080,7 +6491,7 @@ loadNiftyChart("1d");
 initSignalEngine();
 tlogLoad();
 
-fetchRSS("https://timesofindia.indiatimes.com/rssfeeds/1898055.cms", "toi");
+fetchRSS("https://economictimes.indiatimes.com/markets/stocks/rssfeeds/2146842.cms", "etmarkets");
 fetchRSS("https://www.livemint.com/rss/markets", "livemint");
 fetchRSS("https://www.business-standard.com/rss/markets-106.rss", "bsmarkets");
 trackData('rss');

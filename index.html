@@ -19,6 +19,12 @@
   • Setup-quality score (0–10) uses only independent inputs — trend 4,
     DTE 2, R:R 2, event risk 2 — never a re-weighting of the signal score.
     It is a setup grade, not a win probability.
+  • Data schedule: auto-poll only 09:00–15:50 IST on trading days, one final
+    refresh after 15:40, one FII/DII fetch at 19:00 (+20:00 retry), hidden tab
+    paused, weekends/holidays off, no polling before 09:00 until interaction.
+  • News/RSS is bundled through the NSE Worker's /news endpoint (one request,
+    server-side fetch, 10-minute cache) with direct/Jina fallback.
+  • The Nifty header shows the actual NSE quote timestamp, not the word LIVE.
   ─────────────────────────────────────────────────────────────────────
 -->
 <html lang="en">
@@ -103,6 +109,12 @@ body {
   font-size: 1rem;
   font-weight: 600;
   margin-top: 4px;
+}
+#niftyAsOf {
+  font-size: 0.68rem;
+  color: var(--muted2);
+  margin-top: 5px;
+  letter-spacing: 0.02em;
 }
 .header-right { text-align: right; }
 #marketInfo {
@@ -205,6 +217,11 @@ body {
   border-bottom: 1px solid var(--border);
   padding-bottom: 10px;
   margin-bottom: 12px;
+}
+.panel-note {
+  font-size: 0.62rem;
+  color: var(--muted);
+  margin: -6px 0 10px;
 }
 .data-row {
   display: flex;
@@ -1147,9 +1164,10 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
 <!-- ── HEADER ── -->
 <div class="header">
   <div class="header-left">
-    <div class="header-title">NIFTY 50 LIVE INDEX</div>
+    <div class="header-title">NIFTY 50</div>
     <div id="price">Loading...</div>
     <div id="change">--</div>
+    <div id="niftyAsOf">As of —</div>
   </div>
   <div class="header-right">
     <div id="marketInfo"></div>
@@ -1187,6 +1205,9 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
     <span id="workerStatusDot" style="width:8px;height:8px;border-radius:50%;background:#64748b;display:inline-block;flex-shrink:0"></span>
     <span id="workerStatusText" style="font-size:0.68rem;color:var(--muted)">Worker: checking...</span>
   </div>
+  <div class="refresh-sep">|</div>
+
+  <div class="refresh-item">Auto: <span id="trafficState">checking</span></div>
   <div class="refresh-sep">|</div>
 
   <div class="refresh-item">Next Nifty: <span id="refreshCountdown">15s</span></div>
@@ -1232,12 +1253,14 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
   <!-- Global Markets -->
   <div class="panel">
     <h3>Global Markets</h3>
+    <div class="panel-note">Yahoo delayed · auto-updates 09:00–15:50 IST only</div>
     <div id="global"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
   </div>
 
   <!-- Commodities & Forex -->
   <div class="panel">
     <h3>Commodities & Forex</h3>
+    <div class="panel-note">Yahoo delayed · auto-updates 09:00–15:50 IST only</div>
     <div id="commodities"><div class="skeleton"></div><div class="skeleton"></div><div class="skeleton"></div></div>
   </div>
 
@@ -1454,7 +1477,7 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
 <!-- ── SECTOR HEATMAP ── -->
 <div class="section-label">Sector Heatmap</div>
 <div class="panel">
-  <h3>Nifty Sectoral Indices — Live % Change</h3>
+  <h3>Nifty Sectoral Indices - % Change</h3>
   <div class="heatmap-grid" id="sectorHeatmap">
     <div class="skeleton" style="height:80px;border-radius:8px"></div>
     <div class="skeleton" style="height:80px;border-radius:8px"></div>
@@ -1713,8 +1736,8 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
   </div>
 </div>
 
-<!-- ── LIVE CHART ── -->
-<div class="section-label">Nifty 50 Live Chart</div>
+<!-- ── NIFTY CHART ── -->
+<div class="section-label">Nifty 50 Chart</div>
 <div class="panel">
   <h3>Nifty 50 — Price Chart</h3>
   <div style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px;align-items:center">
@@ -1771,6 +1794,12 @@ const WORKER_URL = "https://choudhary-dashboard.ivijaysinghchoudhary.workers.dev
 // Deploy worker.js from this folder, then paste its URL below.
 // Leave "" to keep using r.jina.ai directly.
 const NSE_WORKER_URL = "https://nse-proxy.ivijaysinghchoudhary.workers.dev";
+
+// One bundled request for every RSS/announcement feed. The Worker fetches
+// the feeds server-side (no browser CORS), caches them for 10 minutes, and
+// returns per-feed text. If this endpoint is unavailable the browser falls
+// back to the old direct/Jina path, feed by feed.
+const NEWS_BUNDLE_URL = NSE_WORKER_URL ? NSE_WORKER_URL.replace(/\/+$/, "") + "/news" : "";
 
 // ── NSE F&O RULES (verified 20-Oct-2026) ─────────────────────────────
 // Weekly NIFTY expiry: Tuesday. Monthly: last Tuesday.
@@ -1886,6 +1915,315 @@ function getMarketSession() {
   return { ...now, status, cls, isHoliday, foClose, expiryToday, isTradingDay: !isHoliday };
 }
 
+/* ─── TRAFFIC SCHEDULE ─────────────────────────────────────────────────
+   One place decides whether the page may make market-data requests.
+
+   Trading day:
+     00:00–08:59  no polling (first user interaction may load once)
+     09:00–09:14  pre-open polling
+     09:15–15:30  normal market polling
+     15:31–15:40  F&O close / position tracking
+     15:41–15:50  one final refresh, then stop
+     15:51–18:59  no polling
+     19:00–20:00  one FII/DII fetch (+ one retry at 20:00)
+     20:01–23:59  no polling
+   Weekend / NSE holiday: no polling.
+   Hidden tab: no polling, regardless of the clock.
+   ──────────────────────────────────────────────────────────────────── */
+const TRAFFIC_POLL_PHASES = new Set(["preopen", "open", "fno"]);
+let trafficState = { running: false, phase: "boot", reason: "boot" };
+let autoRefreshActive = false;
+let lastBootstrapAt = 0;
+let _bootstrapPromise = null;
+let lastFinalRefreshKey = "";
+let lastFiiWindowKey = "";
+let lastFiiRetryKey = "";
+let _lastTrafficPhaseKey = "";
+let hasUserInteracted = false;
+const LAST_NIFTY_CACHE_KEY = "marketDashboard.lastNiftySnapshot";
+
+function getTrafficPhase() {
+  const s = getMarketSession();
+  const m = s.mins;
+  if (!s.isTradingDay)      return { key: "closed",     label: "Market closed — auto-refresh off", poll: false };
+  if (m < 540)              return { key: "before0900", label: "Auto-refresh starts at 09:00 IST",   poll: false };
+  if (m < 555)              return { key: "preopen",    label: "Pre-open refresh",                   poll: true  };
+  if (m <= 930)             return { key: "open",       label: "Market open — normal refresh",       poll: true  };
+  if (m <= s.foClose)       return { key: "fno",        label: "F&O session — position tracking",    poll: true  };
+  if (m <= 950)             return { key: "postclose",  label: "Final refresh window",               poll: false };
+  if (m >= 1140 && m <= 1200) return { key: "fii",      label: "FII/DII evening window",             poll: false };
+  return { key: "closed", label: "Market closed — auto-refresh off", poll: false };
+}
+function isTrafficPollingAllowed() {
+  if (document.hidden) return false;
+  return TRAFFIC_POLL_PHASES.has(getTrafficPhase().key);
+}
+function canRunSignalEngine() {
+  if (!isTrafficPollingAllowed()) return false;
+  const s = getMarketSession();
+  return s.isTradingDay && s.mins >= 555 && s.mins <= s.foClose;
+}
+function trafficShortLabel(phase) {
+  return ({ before0900: "09:00", preopen: "pre-open", open: "open", fno: "F&O",
+            postclose: "final", fii: "FII", closed: "off" })[phase.key] || "off";
+}
+function setTrafficUi(label, color) {
+  const st = document.getElementById("trafficState");
+  if (st) { st.textContent = label; st.style.color = color || "var(--muted2)"; }
+  const dot = document.getElementById("refreshDot");
+  if (dot) { dot.style.background = color || "#64748b"; dot.style.boxShadow = color ? `0 0 4px ${color}` : "none"; }
+}
+function setCountdownPaused(label) {
+  const el = document.getElementById("refreshCountdown");
+  if (el) { el.textContent = label; el.style.color = "var(--muted)"; }
+}
+function showTrafficActive(phase) {
+  autoRefreshActive = true;
+  setTrafficUi("ON", "#22c55e");
+  setCountdownPaused("15s");
+  const bar = document.getElementById("refreshBar");
+  if (bar) bar.title = `${phase.label} · auto-refresh ON`;
+  startCountdown();
+}
+function showTrafficPaused(phase) {
+  autoRefreshActive = false;
+  clearInterval(window._cdInterval);
+  const hidden = document.hidden ? "tab hidden" : trafficShortLabel(phase);
+  setTrafficUi("OFF", "#64748b");
+  setCountdownPaused("paused");
+  const bar = document.getElementById("refreshBar");
+  if (bar) bar.title = `${phase.label}${document.hidden ? " · tab hidden" : ""} · no market polling`;
+  const el = document.getElementById("refreshCountdown");
+  if (el) el.title = hidden;
+
+  if (!_allIndicesFetchedAt) {
+    const price = document.getElementById("price");
+    if (price && price.textContent === "Loading...") {
+      price.textContent = "Market closed";
+      price.style.color = "var(--muted)";
+      price.style.fontSize = "2rem";
+      const change = document.getElementById("change");
+      if (change) change.textContent = "Click or tap to load the last available data";
+    }
+  }
+}
+function applyTrafficSchedule(reason = "tick") {
+  const phase = getTrafficPhase();
+  trafficState.phase = phase.key;
+  trafficState.reason = reason;
+  const allowed = !document.hidden && phase.poll;
+
+  if (allowed) {
+    if (!trafficState.running) {
+      trafficState.running = true;
+      startIntervals();
+      if (Date.now() - lastBootstrapAt > 2 * 60 * 1000) bootstrapOnce("resume");
+    }
+    showTrafficActive(phase);
+  } else {
+    if (trafficState.running) {
+      trafficState.running = false;
+      clearAllIntervals();
+    }
+    showTrafficPaused(phase);
+  }
+}
+async function bootstrapOnce(reason = "manual") {
+  if (_bootstrapPromise) return _bootstrapPromise;
+  if (Date.now() - lastBootstrapAt < 5000) return;
+  lastBootstrapAt = Date.now();
+  console.log("Bootstrap data load:", reason);
+
+  _bootstrapPromise = (async () => {
+    const s = getMarketSession();
+    const liveSession = s.isTradingDay && s.mins >= 540 && s.mins <= s.foClose;
+
+    await Promise.allSettled([
+      loadKVSnapshot(),
+      trackedFetchNifty(),
+      trackedLoadIndices(),
+      trackedLoadGlobal(),
+      trackedLoadGiftPanel(),
+      trackedLoadCommodities(),
+      trackedLoadTicker(),
+      trackedLoadAdvDecline(),
+      trackedLoadSectorHeatmap(),
+      trackedLoadAnnouncements(),
+      trackedLoadFIIDII(),
+      loadAllNews(),
+      loadNiftyChart("1d"),
+    ]);
+
+    if (liveSession) {
+      await Promise.allSettled([
+        ghLoadPCRHistory().then(() => trackedLoadPCR()),
+        trackedLoad52Week(),
+      ]);
+    }
+  })().finally(() => { _bootstrapPromise = null; });
+  return _bootstrapPromise;
+}
+async function finalMarketRefresh() {
+  setTrafficUi("FINAL", "#f59e0b");
+  setCountdownPaused("final…");
+  await Promise.allSettled([
+    trackedFetchNifty(),
+    trackedLoadIndices(),
+    trackedLoadGiftPanel(),
+    trackedLoadAdvDecline(),
+    trackedLoadSectorHeatmap(),
+    trackedLoadPCR(),
+    loadNiftyChart(niftyChartRange),
+  ]);
+  updateRefreshIndicator();
+  setTrafficUi("OFF", "#64748b");
+  setCountdownPaused("stopped");
+}
+async function eveningFiiFetch(isRetry = false) {
+  setTrafficUi(isRetry ? "FII retry" : "FII", "#f59e0b");
+  setCountdownPaused(isRetry ? "retry…" : "fetch…");
+  await Promise.allSettled([trackedLoadFIIDII()]);
+  setTrafficUi("OFF", "#64748b");
+  setCountdownPaused("stopped");
+}
+function trafficTick() {
+  const phase = getTrafficPhase();
+  const dayKey = todayIST();
+  const key = `${dayKey}|${phase.key}`;
+  const phaseChanged = key !== _lastTrafficPhaseKey;
+  _lastTrafficPhaseKey = key;
+
+  // One final refresh after 15:40, then stop market polling.
+  // Do not wake a hidden tab just for this — run it when the tab is visible.
+  if (!document.hidden && phase.key === "postclose" && lastFinalRefreshKey !== dayKey) {
+    lastFinalRefreshKey = dayKey;
+    finalMarketRefresh();
+  }
+
+  // FII/DII is published after the cash close. One fetch at 19:00,
+  // one retry at 20:00 if the page is still open and visible.
+  if (!document.hidden && phase.key === "fii") {
+    if (lastFiiWindowKey !== dayKey) {
+      lastFiiWindowKey = dayKey;
+      eveningFiiFetch(false);
+    } else if (getMarketSession().mins >= 1200 && lastFiiRetryKey !== dayKey) {
+      lastFiiRetryKey = dayKey;
+      eveningFiiFetch(true);
+    }
+  }
+
+  if ((!document.hidden && phase.poll) !== trafficState.running || phaseChanged) {
+    applyTrafficSchedule("tick");
+  }
+}
+function handleFirstUserInteraction() {
+  if (hasUserInteracted) return;
+  hasUserInteracted = true;
+  if (!isTrafficPollingAllowed() && lastBootstrapAt === 0) {
+    bootstrapOnce("first interaction");
+  }
+  applyTrafficSchedule("first interaction");
+}
+
+/* ─── NSE QUOTE TIMESTAMP ─── */
+function parseNseTimestamp(raw) {
+  const m = String(raw || "").match(/^(\d{1,2})-([A-Za-z]{3})-(\d{4})\s+(\d{1,2}):(\d{2})/);
+  if (!m) return null;
+  const mon = ["jan","feb","mar","apr","may","jun","jul","aug","sep","oct","nov","dec"].indexOf(m[2].toLowerCase());
+  if (mon < 0) return null;
+  // NSE timestamps are IST. Build the equivalent UTC instant without
+  // depending on the browser's local timezone.
+  return new Date(Date.UTC(+m[3], mon, +m[1], +m[4] - 5, +m[5] - 30));
+}
+function formatNseQuoteTime(raw, includeDate = false) {
+  const d = parseNseTimestamp(raw);
+  if (!d) return "";
+  const time = d.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false });
+  const date = d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short" });
+  return includeDate ? `${date}, ${time} IST` : `${time} IST`;
+}
+function nseQuoteIsToday(raw) {
+  const d = parseNseTimestamp(raw);
+  if (!d) return false;
+  return d.toLocaleDateString("en-CA", { timeZone: "Asia/Kolkata" }) === todayIST();
+}
+function updateNiftyAsOf() {
+  const el = document.getElementById("niftyAsOf");
+  if (!el) return;
+  if (!_allIndicesTimestamp) {
+    if (_allIndicesFetchedAt) {
+      el.textContent = "Fetched " + new Date(_allIndicesFetchedAt)
+        .toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false }) + " IST";
+    } else {
+      el.textContent = "As of —";
+    }
+    el.style.color = "var(--muted2)";
+    return;
+  }
+
+  const d = parseNseTimestamp(_allIndicesTimestamp);
+  if (!d) {
+    el.textContent = "NSE " + _allIndicesTimestamp;
+    el.style.color = "var(--muted2)";
+    return;
+  }
+
+  const isToday = nseQuoteIsToday(_allIndicesTimestamp);
+  const s = getMarketSession();
+  const live = isToday && s.isTradingDay && s.mins >= 540 && s.mins <= s.foClose;
+  const ageSec = Math.max(0, Math.round((Date.now() - d.getTime()) / 1000));
+  let color = "var(--muted2)";
+  if (live) {
+    color = ageSec > 180 ? "#ef4444" : ageSec > 75 ? "#f59e0b" : "#22c55e";
+  }
+  const label = isToday
+    ? `As of ${formatNseQuoteTime(_allIndicesTimestamp)}`
+    : `Last close: ${formatNseQuoteTime(_allIndicesTimestamp, true)}`;
+  el.textContent = label + (live && ageSec > 90 ? ` · ${Math.max(1, Math.round(ageSec / 60))} min old` : "");
+  el.style.color = color;
+  el.title = `NSE quote timestamp: ${_allIndicesTimestamp} IST` +
+    (live ? ` · ${ageSec}s old` : " · market closed, showing the last published value");
+}
+function saveLastNiftySnapshot(price, prevClose, change, pct) {
+  try {
+    localStorage.setItem(LAST_NIFTY_CACHE_KEY, JSON.stringify({
+      ts: Date.now(), price, prevClose, change, pct, nseTimestamp: _allIndicesTimestamp || ""
+    }));
+  } catch {}
+}
+function restoreLastNiftySnapshot() {
+  try {
+    const raw = localStorage.getItem(LAST_NIFTY_CACHE_KEY);
+    if (!raw) return;
+    const snap = JSON.parse(raw);
+    if (!(snap.price > 0)) return;
+    const priceEl = document.getElementById("price");
+    if (!priceEl || (priceEl.textContent !== "Loading..." && priceEl.textContent !== "Unavailable")) return;
+    const color = snap.change >= 0 ? "#22c55e" : "#ef4444";
+    priceEl.textContent = "₹" + Number(snap.price).toFixed(2);
+    priceEl.style.color = color;
+    priceEl.style.fontSize = "";
+    priceEl.title = "Last cached close — live data will replace it during market hours";
+    const ch = document.getElementById("change");
+    if (ch) {
+      ch.textContent = (snap.change >= 0 ? "▲ " : "▼ ") + Math.abs(snap.change).toFixed(2) + " (" + Math.abs(snap.pct).toFixed(2) + "%)";
+      ch.style.color = color;
+    }
+    const asof = document.getElementById("niftyAsOf");
+    if (asof) {
+      const when = snap.nseTimestamp ? formatNseQuoteTime(snap.nseTimestamp, true) :
+        new Date(snap.ts).toLocaleString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit", hour12: false }) + " IST";
+      asof.textContent = `Last cached: ${when}`;
+      asof.style.color = "var(--muted2)";
+    }
+    const lu = document.getElementById("lastUpdated");
+    if (lu) {
+      lu.textContent = "cached";
+      lu.title = "Last locally cached close; live data loads during market hours";
+    }
+  } catch {}
+}
+
 // Decode r.jina.ai wrapper: "Title: ...\n\nURL Source: ...\n\nMarkdown Content:\n<json>"
 function parseJinaText(txt) {
   let t = String(txt || "");
@@ -1966,6 +2304,7 @@ async function yahooQuote(symbol) {
 
 // Shared caches (avoid hammering NSE/Jina on boot)
 let _allIndices = null, _allIndicesTs = 0, _allIndicesP = null;
+let _allIndicesTimestamp = "", _allIndicesFetchedAt = 0;
 async function getAllIndices(maxAgeMs = 60000) {
   if (_allIndices && Date.now() - _allIndicesTs < maxAgeMs) return _allIndices;
   if (_allIndicesP) return _allIndicesP;
@@ -1973,6 +2312,8 @@ async function getAllIndices(maxAgeMs = 60000) {
     .then(j => {
       if (!j?.data?.length) throw new Error("empty allIndices");
       _allIndices = j.data; _allIndicesTs = Date.now();
+      _allIndicesTimestamp = String(j.timestamp || "").trim();
+      _allIndicesFetchedAt = Date.now();
       return _allIndices;
     })
     .finally(() => { _allIndicesP = null; });
@@ -2074,9 +2415,8 @@ async function checkWorkerHealth(manual = false) {
   }
 }
 
-// Check health on load, then every 2 minutes
-setTimeout(() => checkWorkerHealth(), 2000);
-setInterval(() => checkWorkerHealth(), 120000);
+// Health checks are scheduled with the rest of the market-data intervals
+// in startIntervals(), so they also stop outside market hours.
 
 
 /* ─── CLOCK / MARKET STATUS ─── */
@@ -2125,12 +2465,20 @@ async function fetchNifty() {
     const color  = change >= 0 ? "#22c55e" : "#ef4444";
     document.getElementById("price").textContent = "₹" + price.toFixed(2);
     document.getElementById("price").style.color = color;
+    document.getElementById("price").style.fontSize = "";
     document.getElementById("change").textContent = (change >= 0 ? "▲ " : "▼ ") + Math.abs(change).toFixed(2) + " (" + Math.abs(pct).toFixed(2) + "%)";
     document.getElementById("change").style.color = color;
     updateIndexCard("idx-nifty", "idx-nifty-c", price, change, pct.toFixed(2));
     if (row) {
       document.getElementById("price").title = `Open ${row.open} · High ${row.high} · Low ${row.low} · Prev close ${row.previousClose}`;
+    } else {
+      // Yahoo fallback has no NSE quote timestamp; show fetch time instead.
+      _allIndicesTimestamp = "";
+      _allIndicesFetchedAt = Date.now();
     }
+    updateNiftyAsOf();
+    updateRefreshIndicator();
+    saveLastNiftySnapshot(price, prevClose, change, pct);
   } catch {
     const el = document.getElementById("price");
     if (el && (el.textContent === "Loading..." || el.textContent === "Unavailable")) el.textContent = "Unavailable";
@@ -3036,6 +3384,52 @@ function rssDate(d) {
 // directly and fall back to Jina's raw-text proxy when CORS blocks us.
 const _rssCache = new Map();
 
+// Map the browser feed URLs to the keys returned by the Worker /news bundle.
+const NEWS_FEED_KEYS = {
+  "https://economictimes.indiatimes.com/markets/stocks/rssfeeds/2146842.cms": "etmarkets",
+  "https://www.livemint.com/rss/markets": "livemint",
+  "https://www.business-standard.com/rss/markets-106.rss": "bsmarkets",
+  "https://www.business-standard.com/rss/economy-102.rss": "rbi_bs",
+  "https://www.livemint.com/rss/economy": "rbi_lm",
+  "https://www.business-standard.com/rss/companies-101.rss": "results_bs",
+};
+let _newsBundle = null, _newsBundleTs = 0, _newsBundleP = null, _newsBundleDownUntil = 0;
+
+async function getNewsBundle(force = false) {
+  if (!NEWS_BUNDLE_URL) return null;
+  if (!force && _newsBundle && Date.now() - _newsBundleTs < 10 * 60 * 1000) return _newsBundle;
+  if (_newsBundleP) return _newsBundleP;
+  if (!force && Date.now() < _newsBundleDownUntil) return null;
+
+  _newsBundleP = fetchWithTimeout(NEWS_BUNDLE_URL, {
+    headers: { "Accept": "application/json" },
+    cache: "no-store",
+  }, 14000)
+    .then(async r => {
+      if (!r.ok) throw new Error("news bundle HTTP " + r.status);
+      const d = await r.json();
+      const feeds = d?.feeds || {};
+      const ok = Object.values(feeds).some(f => f?.ok && f?.text);
+      if (!ok) throw new Error("news bundle returned no usable feeds");
+      _newsBundle = d;
+      _newsBundleTs = Date.now();
+      return d;
+    })
+    .catch(e => {
+      _newsBundleDownUntil = Date.now() + 5 * 60 * 1000;
+      console.warn("News bundle unavailable:", e.message);
+      return null;
+    })
+    .finally(() => { _newsBundleP = null; });
+
+  return _newsBundleP;
+}
+function bundleFeedText(url) {
+  const key = NEWS_FEED_KEYS[url];
+  const feed = key && _newsBundle?.feeds ? _newsBundle.feeds[key] : null;
+  return feed?.ok && feed?.text ? feed.text : "";
+}
+
 function parseFeedXml(raw) {
   if (!raw || typeof raw !== "string") return [];
   let text = raw;
@@ -3073,47 +3467,71 @@ function fetchWithTimeout(url, opts = {}, ms = 12000) {
 }
 
 async function fetchFeedText(url) {
-  // Direct first. Some feeds allow CORS; many do not.
-  try {
-    const r = await fetchWithTimeout(url, { headers: { "Accept": "application/rss+xml, application/xml, text/xml, */*" } });
-    if (r.ok) {
-      const t = await r.text();
-      if (/<rss|<feed|<rdf:RDF/i.test(t)) return t;
-    }
-  } catch {}
-  // Jina raw-text fallback. The header keeps it as XML instead of markdown.
-  try {
-    const r = await fetchWithTimeout(JINA_BASE + url, { headers: { "X-Return-Format": "text" } });
-    if (r.ok) {
-      const t = await r.text();
-      if (/<rss|<feed|<rdf:RDF/i.test(t)) return t;
-    }
-  } catch {}
-  return "";
+  const direct = async () => {
+    try {
+      const r = await fetchWithTimeout(url, { headers: { "Accept": "application/rss+xml, application/xml, text/xml, */*" } });
+      if (r.ok) {
+        const t = await r.text();
+        if (/<rss|<feed|<rdf:RDF/i.test(t)) return t;
+      }
+    } catch {}
+    return "";
+  };
+  const viaJina = async () => {
+    try {
+      const r = await fetchWithTimeout(JINA_BASE + url, { headers: { "X-Return-Format": "text" } });
+      if (r.ok) {
+        const t = await r.text();
+        if (/<rss|<feed|<rdf:RDF/i.test(t)) return t;
+      }
+    } catch {}
+    return "";
+  };
+
+  // These publishers consistently block browser CORS. When a Worker bundle
+  // URL is configured, try Jina first (no CORS console noise) and use direct
+  // only as the last resort. Without a Worker URL, keep the old direct-first
+  // behaviour for feeds that do allow CORS.
+  if (NEWS_BUNDLE_URL && NEWS_FEED_KEYS[url]) {
+    return (await viaJina()) || (await direct());
+  }
+  return (await direct()) || (await viaJina());
 }
 
 async function rssItems(urls, filterFn) {
+  await getNewsBundle().catch(() => null);
+
+  const choose = items => {
+    if (!filterFn) return items;
+    const matched = items.filter(filterFn);
+    return matched.length >= 2 ? matched : items;
+  };
+
   for (const url of urls) {
     try {
       const cached = _rssCache.get(url);
       if (cached && Date.now() - cached.ts < 10 * 60000 && cached.items.length) {
-        let items = cached.items;
-        if (filterFn) {
-          const matched = items.filter(filterFn);
-          if (matched.length >= 2) items = matched;
-        }
+        const items = choose(cached.items);
         if (items.length) return items;
       }
 
+      // Preferred path: one Worker request already contains every feed.
+      const bundledText = bundleFeedText(url);
+      if (bundledText) {
+        const parsed = parseFeedXml(bundledText);
+        if (parsed.length) {
+          _rssCache.set(url, { ts: Date.now(), items: parsed });
+          const items = choose(parsed);
+          if (items.length) return items;
+        }
+      }
+
+      // Fallback: direct feed, then Jina, feed by feed.
       const text = await fetchFeedText(url);
       const parsed = parseFeedXml(text);
       if (parsed.length) {
         _rssCache.set(url, { ts: Date.now(), items: parsed });
-        let items = parsed;
-        if (filterFn) {
-          const matched = items.filter(filterFn);
-          if (matched.length >= 2) items = matched;
-        }
+        const items = choose(parsed);
         if (items.length) return items;
       }
     } catch {}
@@ -3177,10 +3595,21 @@ async function fetchRSS(url, id) {
         <div class="news-date">${escHtml(rssDate(n.pubDate))}</div>
       </div>`).join("")
     : `<div style="color:var(--muted);font-size:0.78rem;line-height:1.6">
-        Feed unavailable right now — direct and proxy fetches both failed.<br>
+        Feed unavailable right now — bundle, direct and proxy fetches all failed.<br>
         <a href="${escHtml(url)}" target="_blank" rel="noopener" style="color:var(--accent)">Open source ↗</a>
         <div style="font-size:0.62rem;color:var(--muted);margin-top:4px">Retries automatically with the next refresh</div>
       </div>`;
+}
+
+const NEWS_COLUMNS = [
+  { id: "etmarkets", url: "https://economictimes.indiatimes.com/markets/stocks/rssfeeds/2146842.cms" },
+  { id: "livemint",  url: "https://www.livemint.com/rss/markets" },
+  { id: "bsmarkets", url: "https://www.business-standard.com/rss/markets-106.rss" },
+];
+async function loadAllNews() {
+  await getNewsBundle().catch(() => null);
+  await Promise.allSettled(NEWS_COLUMNS.map(c => fetchRSS(c.url, c.id)));
+  trackData("rss");
 }
 
 /* ─── NIFTY CHART (Chart.js + Yahoo data via Jina) ─── */
@@ -3279,22 +3708,35 @@ async function loadNiftyChart(range = "1d") {
   }
 }
 
-// Refresh chart every 5 min
-setInterval(() => loadNiftyChart(niftyChartRange), 5 * 60 * 1000);
+// The chart refresh is part of startIntervals(), so it pauses with the rest
+// of the market-data schedule.
 
 /* ─── AUTO-REFRESH INDICATOR ─── */
 let refreshCountdown = 15;
 function updateRefreshIndicator() {
-  const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
   const el = document.getElementById("lastUpdated");
-  if (el) el.textContent = now.toLocaleTimeString("en-IN");
+  if (!el) return;
+  if (_allIndicesTimestamp) {
+    const sameDay = nseQuoteIsToday(_allIndicesTimestamp);
+    el.textContent = formatNseQuoteTime(_allIndicesTimestamp, !sameDay);
+    el.title = `NSE quote timestamp: ${_allIndicesTimestamp} IST (not the page refresh time)`;
+  } else if (_allIndicesFetchedAt) {
+    el.textContent = new Date(_allIndicesFetchedAt)
+      .toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false }) + " IST";
+    el.title = "Time this browser fetched the data";
+  } else {
+    el.textContent = "—";
+    el.title = "No market data loaded yet";
+  }
 }
 function startCountdown() {
+  if (!autoRefreshActive) return;
   refreshCountdown = 15;
   clearInterval(window._cdInterval);
+  const el = document.getElementById("refreshCountdown");
+  if (el) el.style.color = "";
   window._cdInterval = setInterval(() => {
     refreshCountdown--;
-    const el = document.getElementById("refreshCountdown");
     if (el) el.textContent = refreshCountdown + "s";
     if (refreshCountdown <= 0) refreshCountdown = 15;
   }, 1000);
@@ -3636,7 +4078,6 @@ const OBS_WINDOW_END = "10:30";
 let signalLog = [];
 let notificationsEnabled = false;
 let lastSignalTime = (() => { try { return localStorage.getItem("marketDashboard.lastSignalSlot") || null; } catch { return null; } })();
-let signalCheckInterval = null;
 
 function getATM(spot) {
   return Math.round(spot / 50) * 50;
@@ -5246,7 +5687,7 @@ function renderTlog() {
     const outcome   = e.status === "SIGNAL" ? "AWAITING"
                     : e.status === "WATCH"  ? "WATCH"
                     : e.status === "EXPIRED"? "MISSED"
-                    : e.status === "OPEN"   ? "LIVE"
+                    : e.status === "OPEN"   ? "OPEN"
                     : e.outcome || "—";
     const outcomeClass = e.outcome === "WIN" ? "tlog-outcome-win"
                        : e.outcome === "LOSS" ? "tlog-outcome-loss"
@@ -5827,9 +6268,38 @@ async function toggleNotifications() {
   }
 }
 
+// Shown when the market-data schedule is off. Existing signal/position data
+// stays visible; only the generation of a new signal is paused.
+function renderSignalPaused() {
+  const phase = getTrafficPhase();
+  const banner = document.getElementById("sigWaitBanner");
+  if (banner) {
+    banner.style.display = "block";
+    banner.textContent = `⏸ ${phase.label}. No new signal is generated outside the market-data schedule.`;
+  }
+  if (!currentSignal) {
+    const dir = document.getElementById("sigDirection");
+    if (dir) { dir.textContent = "⏸ PAUSED"; dir.style.color = "#f59e0b"; }
+    const sub = document.getElementById("sigSubtitle");
+    if (sub) sub.textContent = phase.label;
+  }
+  const badge = document.getElementById("sigConfBadge");
+  if (badge) { badge.textContent = "● PAUSED"; badge.className = "sig-confidence conf-medium"; }
+  const validity = document.getElementById("sigEntryValidity");
+  if (validity) validity.textContent = "PAUSED";
+  const confirm = document.getElementById("sigConfirmBtn");
+  if (confirm) confirm.disabled = true;
+  const live = document.getElementById("sigUseLiveBtn");
+  if (live) live.disabled = true;
+}
+
 // Main signal runner — gathers all live data and computes signal
 // logEvent=false on page load (render only); true for scheduled signal minutes.
 async function runSignalEngine(force = false, logEvent = false) {
+  if (!canRunSignalEngine()) {
+    if (force || !document.hidden) renderSignalPaused();
+    return;
+  }
   if (!force && !isSignalTime()) return;
   if (!force && !getMarketSession().isTradingDay) return;
 
@@ -5940,13 +6410,12 @@ function initSignalEngine() {
     : `${kind} Expiry: ${expiry.dateStr} (${expiry.daysToExpiry} trading days)`;
   document.getElementById("sigExpiryLabel").textContent = label;
   document.getElementById("sigNextTime").textContent = getNextSignalTime();
-  signalCheckInterval = setInterval(() => runSignalEngine(false, true), 60000);
-  // Lifecycle timers: expire untaken signals every minute; track the open
-  // position every 2 minutes; force a time-stop check at 15:15.
+  // Signal refresh and open-position tracking are scheduled by startIntervals()
+  // so they pause outside market hours and when the tab is hidden.
   setInterval(tlogExpireSignals, 60000);
-  setInterval(() => { if (getMarketSession().isTradingDay) trackOpenPosition(); }, 120000);
-  setTimeout(() => { if (getMarketSession().isTradingDay) trackOpenPosition(); }, 15000);
-  // Render immediately (no logging) and refresh once after the other feeds settle
+  setTimeout(() => { if (canRunSignalEngine()) trackOpenPosition(); }, 15000);
+  // Render immediately (no logging) and refresh once after the other feeds settle.
+  // renderSignalPaused() is used when the market-data schedule is off.
   runSignalEngine(true, false);
   setTimeout(() => runSignalEngine(true, false), 12000);
 }
@@ -6028,6 +6497,9 @@ function startIntervals() {
   const mktMs    = lowDataMode ? 3 * 60000   : 60000;       // 3min vs 1min
   const annMs    = lowDataMode ? 30 * 60000  : 10 * 60000;  // 30min vs 10min
 
+  const newsMs = lowDataMode ? 30 * 60000 : 15 * 60000;
+  const fiiMs  = lowDataMode ? 120 * 60000 : 60 * 60000;
+
   intervals.nifty  = setInterval(() => { trackedFetchNifty(); updateRefreshIndicator(); startCountdown(); }, 15000);
   intervals.indices = setInterval(trackedLoadIndices,      30000);
   intervals.global  = setInterval(trackedLoadGlobal,       mktMs);
@@ -6037,8 +6509,15 @@ function startIntervals() {
   intervals.pcr     = setInterval(trackedLoadPCR,          15 * 60000);
   intervals.ad      = setInterval(trackedLoadAdvDecline,   adMs);
   intervals.sectors = setInterval(trackedLoadSectorHeatmap, secMs);
-  intervals.fii     = setInterval(trackedLoadFIIDII,       5 * 60000);
+  intervals.fii     = setInterval(trackedLoadFIIDII,       fiiMs);
   intervals.ann     = setInterval(trackedLoadAnnouncements, annMs);
+  intervals.news    = setInterval(loadAllNews,             newsMs);
+  intervals.signal  = setInterval(() => runSignalEngine(false, true), 60000);
+  intervals.track   = setInterval(() => { if (canRunSignalEngine()) trackOpenPosition(); }, 120000);
+  intervals.chart   = setInterval(() => loadNiftyChart(niftyChartRange), 5 * 60 * 1000);
+  intervals.health  = setInterval(() => checkWorkerHealth(), 120000);
+
+  checkWorkerHealth();
 
   if (!lowDataMode && w52Ms) {
     intervals.w52 = setInterval(trackedLoad52Week, w52Ms);
@@ -6056,7 +6535,7 @@ function setTickerInterval(ms) {
   const secs = ms / 1000;
   const btn = document.getElementById("tbtn-" + secs);
   if (btn) btn.classList.add("active");
-  startIntervals(); // restart with new ticker interval
+  if (trafficState.running) startIntervals(); // restart with new ticker interval
   showDataSavings();
 }
 
@@ -6071,9 +6550,9 @@ function toggleLowDataMode() {
     btn.textContent = "OFF";
     btn.classList.remove("low-data-on");
     document.body.classList.remove("low-data-mode");
-    load52Week(); // reload 52W when turning off
+    if (trafficState.running) load52Week(); // reload 52W when turning off
   }
-  startIntervals();
+  if (trafficState.running) startIntervals();
   showDataSavings();
 }
 
@@ -6128,7 +6607,8 @@ function showDataSavings() {
     <div style="color:var(--muted2)">Current settings:
       <strong style="color:${saving > 0 ? "#22c55e" : "var(--text)"}">~${currMB.toFixed(0)} MB/day</strong></div>
     ${saving > 0 ? `<div style="color:#22c55e;font-weight:700;margin-top:4px">💾 Saving ~${saving.toFixed(0)} MB/day (${savingPct}%)</div>` : ""}
-    <div style="font-size:0.65rem;color:var(--muted);margin-top:4px">Ticker: every ${currTickerSecs}s · 52W: ${lowDataMode ? "load-once" : "every 5min"}</div>`;
+    <div style="font-size:0.65rem;color:var(--muted);margin-top:4px">Ticker: every ${currTickerSecs}s · 52W: ${lowDataMode ? "load-once" : "every 5min"}</div>
+    <div style="font-size:0.65rem;color:var(--muted);margin-top:2px">Auto-polling only 09:00–15:50 IST · final refresh after 15:40 · FII/DII at 19:00 · hidden tab = paused</div>`;
   document.body.appendChild(toast);
   setTimeout(() => { toast.style.opacity = "0"; setTimeout(() => toast.remove(), 300); }, 5000);
 }
@@ -6175,9 +6655,12 @@ async function loadKVSnapshot() {
       }
     }
 
-    // Show KV load notice
+    // Show KV load notice only if live NSE data has not supplied a timestamp.
     const upd = document.getElementById("lastUpdated");
-    if (upd) upd.textContent = `${snap.time} (KV)`;
+    if (upd && !_allIndicesTimestamp) {
+      upd.textContent = `${snap.time} (KV)`;
+      upd.title = "Cloudflare KV snapshot time (live NSE timestamp not loaded yet)";
+    }
 
   } catch(e) {
     console.log("KV snapshot load failed:", e.message);
@@ -6466,38 +6949,33 @@ function setupDailyReset() {
 /* ─── BOOT ─── */
 updateClock();
 updateRefreshIndicator();
-startCountdown();
+restoreLastNiftySnapshot();
 
-// Load KV snapshot in the background (does not block the dashboard)
-loadKVSnapshot();
-
-trackedFetchNifty();
-trackedLoadIndices();
-trackedLoadGlobal();
-trackedLoadGiftPanel();
-trackedLoadCommodities();
-trackedLoadTicker();
-
-// PCR: init chart → load saved history → then fetch live PCR
+// Chart shell and the last local close are free — no network.
 initPCRChart();
-ghLoadPCRHistory().then(() => trackedLoadPCR());
-
-trackedLoadAdvDecline();
-trackedLoad52Week();
-trackedLoadAnnouncements();
-trackedLoadFIIDII();
-trackedLoadSectorHeatmap();
-loadNiftyChart("1d");
 initSignalEngine();
 tlogLoad();
 
-fetchRSS("https://economictimes.indiatimes.com/markets/stocks/rssfeeds/2146842.cms", "etmarkets");
-fetchRSS("https://www.livemint.com/rss/markets", "livemint");
-fetchRSS("https://www.business-standard.com/rss/markets-106.rss", "bsmarkets");
-trackData('rss');
+// This either starts the scheduled intervals (market hours, visible tab) or
+// leaves them off and shows the paused state. Outside market hours the first
+// user interaction performs one load, then polling stays off.
+applyTrafficSchedule("boot");
+trafficTick();
 
 setInterval(updateClock, 1000);
-startIntervals();
+setInterval(trafficTick, 30000);
+
+document.addEventListener("pointerdown", handleFirstUserInteraction, { passive: true });
+document.addEventListener("keydown", handleFirstUserInteraction);
+document.addEventListener("visibilitychange", () => {
+  applyTrafficSchedule("visibility");
+  if (!document.hidden) trafficTick();
+});
+window.addEventListener("focus", () => {
+  applyTrafficSchedule("focus");
+  trafficTick();
+});
+
 setupDailyReset();
 
 

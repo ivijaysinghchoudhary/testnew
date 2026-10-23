@@ -786,6 +786,13 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
 }
 .sig-target .tgt-label { color: var(--muted); font-size: 0.62rem; text-transform: uppercase; letter-spacing: 0.06em; }
 .sig-target .tgt-val   { font-weight: 700; margin-top: 2px; }
+.target-basis {
+  margin: -1px 0 10px;
+  font-size: 0.64rem;
+  line-height: 1.5;
+  color: var(--muted2);
+}
+.target-basis strong { color: var(--muted); }
 .sig-sl {
   font-size: 0.72rem;
   padding: 6px 10px;
@@ -1604,6 +1611,7 @@ body.low-data-mode #refreshBar { border-color: rgba(245,158,11,0.4); background:
         <div class="sig-target"><div class="tgt-label">Target 2</div><div class="tgt-val" id="sigT2">—</div></div>
         <div class="sig-target"><div class="tgt-label">Target 3</div><div class="tgt-val" id="sigT3">—</div></div>
       </div>
+      <div id="sigTargetBasis" class="target-basis">Target basis: waiting for S/R levels and expected move…</div>
 
       <div class="sig-sl" id="sigSL">🛑 Stop Loss: —</div>
 
@@ -4655,6 +4663,124 @@ async function fetchExpectedMove(spot, expiry) {
   } catch { return null; }
 }
 
+// Fallback only: VIX is annualised 1σ, and E|move| ≈ 0.8σ. The live ATM
+// straddle/√DTE value replaces this as soon as the option chain responds.
+function estimateDailyEM(spot, vix) {
+  const sigma = Math.max(0.08, (+vix || 14) / 100);
+  return Math.max(1, spot * sigma * 0.8 / Math.sqrt(252));
+}
+
+function srLevelSource(level) {
+  const label = String(level?.label || "");
+  const m = label.match(/\(([^)]+)\)/);
+  if (m) return m[1];
+  if (level?.type === "round100") return "round 100";
+  if (level?.type === "round")    return "round 500";
+  if (level?.type === "swing-high") return "swing high";
+  if (level?.type === "swing-low")  return "swing low";
+  if (level?.type === "week-high")  return "5d high";
+  if (level?.type === "week-low")   return "5d low";
+  if (level?.type === "prev-high")  return "prev high";
+  if (level?.type === "prev-low")   return "prev low";
+  return "S/R";
+}
+
+/* Targets are not premium multiples. We first pick the next meaningful
+   resistance (CE) or support (PE) levels, capped by the session's expected
+   move, then convert those Nifty levels into option premium using delta.
+
+   The caps keep T1 inside a realistic one-day move. T2 is a continuation and
+   T3 is deliberately a runner. If no S/R level sits inside the cap, the target
+   falls back to a fraction of the expected move instead of inventing a level. */
+function computeSignalTargets({ spot, type, entryPremium, delta, levels = [], dailyEM, dte = 5 }) {
+  const em    = Math.max(1, +dailyEM || estimateDailyEM(spot, 14));
+  const d     = Math.max(0.05, Math.abs(+delta || 0.5));
+  const entry = Math.max(0.05, +entryPremium || 0.05);
+  const dir   = type === "CE" ? 1 : -1;
+
+  const candidates = (Array.isArray(levels) ? levels : [])
+    .map(l => ({ price: +l?.price, label: String(l?.label || ""), type: l?.type || "" }))
+    .filter(l => Number.isFinite(l.price) && (dir > 0 ? l.price > spot : l.price < spot))
+    .map(l => ({ ...l, move: Math.abs(l.price - spot) }))
+    .filter(l => l.move >= Math.max(5, spot * 0.0005))
+    .sort((a, b) => a.move - b.move);
+
+  // The S/R engine already merges levels within 25 points; this is a final
+  // guard against duplicate targets from round numbers and swing levels.
+  const unique = [];
+  for (const l of candidates) {
+    if (!unique.some(u => Math.abs(u.price - l.price) < Math.max(10, spot * 0.0005))) unique.push(l);
+  }
+
+  // DTE-aware caps, expressed in daily expected moves. T1 is a same-session
+  // target; T2/T3 are allowed further because they are continuation/runner
+  // targets, not the base case.
+  const minGap = [
+    // Do not skip a real nearby S/R just to manufacture a bigger T1. Only
+    // ignore levels that are effectively at spot (<0.15% / 0.15 EM).
+    Math.max(spot * 0.0015, em * 0.15),
+    Math.max(spot * 0.0010, em * 0.30),
+    Math.max(spot * 0.0010, em * 0.35),
+  ];
+  const caps = [1.15, dte <= 1 ? 2.10 : 1.90, dte <= 1 ? 2.80 : 2.40];
+  const fallbacks = [0.60, 1.10, 1.70];
+
+  const targets = [];
+  let prevMove = 0;
+  for (let i = 0; i < 3; i++) {
+    const lower = i === 0 ? minGap[0] : prevMove + minGap[i];
+    const cap   = Math.max(lower + 1, em * caps[i]);
+    const level = unique.find(l =>
+      l.move >= lower && l.move <= cap &&
+      !targets.some(t => Math.abs(t.spot - l.price) < 1)
+    );
+
+    let move = level ? level.move : Math.max(lower, em * fallbacks[i]);
+    move = Math.min(cap, move);
+    if (i > 0 && move <= prevMove + 1) move = Math.min(cap, prevMove + minGap[i]);
+
+    const targetSpot = dir > 0 ? spot + move : spot - move;
+    let price = Math.round((entry + d * move) * 20) / 20; // NSE tick = 0.05
+    price = Math.max(Math.round((entry + 0.05) * 20) / 20, price);
+    const pct = entry > 0 ? +((price / entry - 1) * 100).toFixed(1) : 0;
+
+    targets.push({
+      spot: +targetSpot.toFixed(1),
+      move: +move.toFixed(1),
+      price,
+      pct,
+      emRatio: +(move / em).toFixed(2),
+      source: level ? srLevelSource(level) : `${(move / em).toFixed(1)}× EM`,
+      fromLevel: !!level,
+    });
+    prevMove = move;
+  }
+
+  return { targets, em: +em.toFixed(1), delta: +d.toFixed(2) };
+}
+
+function renderSignalTargets(sig, data) {
+  if (!data?.targets?.length) return;
+  const ids = ["sigT1", "sigT2", "sigT3"];
+  data.targets.forEach((t, i) => {
+    const el = document.getElementById(ids[i]);
+    if (!el) return;
+    el.textContent = `₹${t.price.toFixed(2)} (${t.pct >= 0 ? "+" : ""}${t.pct.toFixed(0)}%)`;
+    el.title = `Nifty ${Math.round(t.spot).toLocaleString("en-IN")} · ${t.emRatio.toFixed(2)}× daily EM · Δ-mapped from ₹${(+sig.entryMid).toFixed(2)}`;
+    el.style.color = i === 0 ? "#84cc16" : "#22c55e";
+  });
+
+  const basis = document.getElementById("sigTargetBasis");
+  if (basis) {
+    const parts = data.targets.map((t, i) =>
+      `T${i + 1} ${Math.round(t.spot).toLocaleString("en-IN")} (${t.source}) · ${t.emRatio.toFixed(2)}× EM`
+    );
+    basis.innerHTML = `<strong>Target basis:</strong> ${parts.join(" · ")}<br>` +
+      `<span style="color:var(--muted)">Nifty levels → premium at first-order Δ${data.delta.toFixed(2)}. ` +
+      `Actual premium also depends on IV, gamma and theta; T3 is a runner, not the base case.</span>`;
+  }
+}
+
 // Core signal logic — v2 with corrected factors
 function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty, volScore, volLabel, trend, trigger, dayType, noTrade }) {
   const dayChgPct = ((spot - prevClose) / prevClose * 100);
@@ -4938,9 +5064,8 @@ function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, brea
       secLine.trim()
     ].filter(Boolean).join("\n");
 
-    t1 = `+${Math.round(activePrem * 0.5)} pts (~50%)`;
-    t2 = `+${Math.round(activePrem * 1.0)} pts (~100%)`;
-    t3 = `+${Math.round(activePrem * 1.8)} pts (~180%)`;
+    // Premium targets are generated from S/R + expected move in renderSignal.
+    t1 = "—"; t2 = "—"; t3 = "—";
     sl = `🛑 SL: –${Math.round(activePrem * 0.3)} pts (~30% of prem) · Est. premium ~₹${activePrem}`;
   } else {
     strikeName = "No trade recommended — wait for clearer signal";
@@ -4991,12 +5116,14 @@ function calcOptionEntry(spot, strike, type, dte, vix) {
   // Exit at SL = 30% of entry (option buyer's rule)
   const slPrice   = Math.max(1, Math.round(entryMid * 0.70 / 0.5) * 0.5); // exit when 30% gone
 
-  // Targets based on premium multiples
-  const t1Price   = Math.round(entryMid * 1.5  / 0.5) * 0.5;
-  const t2Price   = Math.round(entryMid * 2.0  / 0.5) * 0.5;
-  const t3Price   = Math.round(entryMid * 2.8  / 0.5) * 0.5;
+  // Delta is the bridge from Nifty points to option premium. Targets are
+  // calculated later from S/R + expected move, not from premium multiples.
+  const delta = Math.abs(bsDelta(S, K, T, r, sigma, type));
 
-  return { fairValue: fairValue.toFixed(2), entryMid, entryLow, entryHigh, slPrice, t1Price, t2Price, t3Price, spread };
+  return {
+    fairValue: fairValue.toFixed(2), entryMid, entryLow, entryHigh, slPrice,
+    spread, delta: +delta.toFixed(2), iv: +(sigma * 100).toFixed(1),
+  };
 }
 
 /* ─── SETUP QUALITY SCORE — independent factors only ───
@@ -5035,13 +5162,15 @@ function computeTradeRR(sig, inputs) {
   if (!sig.type || !sig.entryMid || !sig.slPrice) return 0;
   const atm = getATM(inputs.spot);
   const strikeDiff = Math.abs((sig.primaryStrike ?? atm) - atm);
-  const delta = strikeDiff >= 100 ? 0.28 : strikeDiff >= 50 ? 0.38 : 0.50;
+  const delta = Math.abs(sig.optionQ?.delta || (strikeDiff >= 100 ? 0.28 : strikeDiff >= 50 ? 0.38 : 0.50));
   const riskPts = Math.max(1, (sig.entryMid - sig.slPrice) / delta);
-  const sr = inputs.sr;
-  const fallback = inputs.spot * 0.005; // 0.5% move if no level nearby
-  const rewardPts = sig.type === "CE"
-    ? (sr?.above?.price ? sr.above.price - inputs.spot : fallback)
-    : (sr?.below?.price ? inputs.spot - sr.below.price : fallback);
+
+  // Use the target we will actually display (S/R capped by expected move),
+  // not merely the nearest level — otherwise R:R can look better than T1.
+  const t1Spot = +sig.t1Spot || 0;
+  const fallbackLevel = sig.type === "CE" ? inputs.sr?.above?.price : inputs.sr?.below?.price;
+  const targetSpot = t1Spot || fallbackLevel;
+  const rewardPts = targetSpot ? Math.abs(targetSpot - inputs.spot) : inputs.spot * 0.005;
   return Math.max(0, rewardPts / riskPts);
 }
 
@@ -5172,24 +5301,40 @@ function renderSignal(sig, inputs, logEvent = true) {
   // Entry price via Black-Scholes (shown first as fast estimate)
   if (sig.type && sig.primaryStrike) {
     const ep = calcOptionEntry(inputs.spot, sig.primaryStrike, sig.type, sig.expiry?.daysToExpiry ?? 5, inputs.vix);
+    const targetData = computeSignalTargets({
+      spot: inputs.spot,
+      type: sig.type,
+      entryPremium: ep.entryMid,
+      delta: ep.delta,
+      levels: inputs.srLevels || [],
+      dailyEM: estimateDailyEM(inputs.spot, inputs.vix),
+      dte: sig.expiry?.daysToExpiry ?? 5,
+    });
+
+    sig.entryMid = ep.entryMid;
+    sig.slPrice  = ep.slPrice;
+    sig.t1Price  = targetData.targets[0].price;
+    sig.t2Price  = targetData.targets[1].price;
+    sig.t3Price  = targetData.targets[2].price;
+    sig.t1Spot   = targetData.targets[0].spot;
+    sig.t2Spot   = targetData.targets[1].spot;
+    sig.t3Spot   = targetData.targets[2].spot;
+    sig.targets  = targetData.targets;
+    sig.targetBasis = targetData.targets.map((t, i) =>
+      `T${i + 1} ${Math.round(t.spot)} (${t.source}) ${t.emRatio.toFixed(2)}×EM`
+    ).join(" / ");
+    sig.emRatio  = targetData.targets[0].emRatio;
+    sig.emRatios = targetData.targets.map(t => t.emRatio);
+    sig.dailyEM  = targetData.em;
+
     document.getElementById("sigEntryPrice").textContent  = `₹${ep.entryMid} (BS est.)`;
     document.getElementById("sigEntryRange").textContent  = `Range: ₹${ep.entryLow} – ₹${ep.entryHigh}`;
     document.getElementById("sigExitPrice").textContent   = `₹${ep.slPrice}`;
     document.getElementById("sigExitNote").textContent    = `Exit if falls to ₹${ep.slPrice} (–30%)`;
     document.getElementById("sigEntryNote").innerHTML     =
       `⟳ Fetching live NSE price... (Black-Scholes est: ₹${ep.entryMid})`;
-    document.getElementById("sigT1").textContent = `₹${ep.t1Price} (~+50%)`;
-    document.getElementById("sigT2").textContent = `₹${ep.t2Price} (~+100%)`;
-    document.getElementById("sigT3").textContent = `₹${ep.t3Price} (~+180%)`;
-    document.getElementById("sigT1").style.color = "#84cc16";
-    document.getElementById("sigT2").style.color = "#22c55e";
-    document.getElementById("sigT3").style.color = "#22c55e";
     document.getElementById("sigSL").textContent = `🛑 SL: Exit at ₹${ep.slPrice} · Entry ~₹${ep.entryMid} · Max loss ~₹${Math.round((ep.entryMid - ep.slPrice) * NIFTY_LOT_SIZE)} per lot`;
-    sig.entryMid = ep.entryMid;
-    sig.slPrice  = ep.slPrice;
-    sig.t1Price  = ep.t1Price;
-    sig.t2Price  = ep.t2Price;
-    sig.t3Price  = ep.t3Price;
+    renderSignalTargets(sig, targetData);
 
     // Then fetch real NSE price and override BS estimate
     updateEntryPriceFromNSE(sig, inputs);
@@ -5201,6 +5346,8 @@ function renderSignal(sig, inputs, logEvent = true) {
     document.getElementById("sigT1").textContent = sig.t1;
     document.getElementById("sigT2").textContent = sig.t2;
     document.getElementById("sigT3").textContent = sig.t3;
+    const basis = document.getElementById("sigTargetBasis");
+    if (basis) basis.textContent = "No trade — no target levels.";
     document.getElementById("sigSL").textContent = sig.sl;
   }
 
@@ -5365,7 +5512,10 @@ function renderSignal(sig, inputs, logEvent = true) {
     currentSignalAddPromise = tlogAddEntry(sig, inputs, prob);
     currentSignalAddPromise.then(entry => {
       if (!entry) return;
-      if (entry.status === "SIGNAL" && currentSignal === sig) currentSignalTlogId = entry.id;
+      if (entry.status === "SIGNAL" && currentSignal === sig) {
+        currentSignalTlogId = entry.id;
+        if (sig.entryLive) syncCurrentSignalLogTargets(sig).catch(() => {});
+      }
       updateSignalEntryControls();
     }).catch(e => console.warn("Trading log write failed:", e));
     if (sig.actionable !== false && sig.type) {
@@ -5875,6 +6025,11 @@ async function tlogAddEntry(sig, inputs, prob) {
     plannedT1:    sig.t1Price ?? null,
     plannedT2:    sig.t2Price ?? null,
     plannedT3:    sig.t3Price ?? null,
+    t1Spot:       sig.t1Spot ?? null,
+    t2Spot:       sig.t2Spot ?? null,
+    t3Spot:       sig.t3Spot ?? null,
+    targetBasis:  sig.targetBasis ?? null,
+    dailyEM:      sig.dailyEM ?? sig.expMove?.daily ?? null,
     exitPrice:  null,
     outcome,
     status,
@@ -5904,6 +6059,31 @@ async function tlogAddEntry(sig, inputs, prob) {
   return entry;
 }
 
+// The live option quote can arrive after tlogAddEntry has already written the
+// signal. Keep the logged planned levels in sync with what the card displays,
+// but never touch a trade that has already been filled or closed.
+async function syncCurrentSignalLogTargets(sig) {
+  if (!sig || currentSignal !== sig || !currentSignalTlogId) return;
+  const entry = tlogEntries.find(e => e.id === currentSignalTlogId);
+  if (!entry || entry.entryTaken || entry.status === "OPEN" || entry.status === "CLOSED") return;
+  if (entry.status !== "SIGNAL" && entry.status !== "WATCH") return;
+
+  entry.entryPrice   = entry.plannedEntry = sig.entryMid;
+  entry.entrySource  = sig.entryLive ? "NSE planned" : entry.entrySource;
+  entry.slPrice      = entry.plannedSl = sig.slPrice;
+  entry.t1Price      = entry.plannedT1 = sig.t1Price;
+  entry.t2Price      = entry.plannedT2 = sig.t2Price;
+  entry.t3Price      = entry.plannedT3 = sig.t3Price;
+  entry.t1Spot       = sig.t1Spot ?? entry.t1Spot;
+  entry.t2Spot       = sig.t2Spot ?? entry.t2Spot;
+  entry.t3Spot       = sig.t3Spot ?? entry.t3Spot;
+  entry.targetBasis  = sig.targetBasis ?? entry.targetBasis;
+  entry.dailyEM      = sig.dailyEM ?? entry.dailyEM;
+  entry.rr           = sig.prob?.rr ?? entry.rr;
+  tlogLocalWrite(tlogEntries);
+  renderTlog();
+}
+
 async function tlogConfirmEntry(id, price) {
   const entry = tlogEntries.find(e => e.id === id);
   if (!entry) return false;
@@ -5924,6 +6104,8 @@ async function tlogConfirmEntry(id, price) {
   entry.plannedT1    = entry.plannedT1 ?? entry.t1Price;
   entry.plannedT2    = entry.plannedT2 ?? entry.t2Price;
   entry.plannedT3    = entry.plannedT3 ?? entry.t3Price;
+  // Legacy fallback for imported entries that have no stored target. New
+  // entries always carry S/R + expected-move targets.
   if (!(entry.slPrice > 0) && entry.entryPrice > 0) entry.slPrice = +(entry.entryPrice * 0.70).toFixed(2);
   if (!(entry.t1Price > 0) && entry.entryPrice > 0) entry.t1Price = +(entry.entryPrice * 1.50).toFixed(2);
   if (!(entry.t2Price > 0) && entry.entryPrice > 0) entry.t2Price = +(entry.entryPrice * 2.00).toFixed(2);
@@ -6394,7 +6576,7 @@ async function runSignalEngine(force = false, logEvent = false) {
     const trigger   = await getTriggerContext().catch(() => null);
     const dayType   = classifyDayType(ictx, getTargetExpiry());
 
-    const inputs = { spot, prevClose, dayChg, dayChgPct, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty: srCtx.srScorePenalty, volScore: volData.volScore, volLabel: volData.volLabel, trend, trigger, dayType, sr: srCtx, event: eventRisk };
+    const inputs = { spot, prevClose, dayChg, dayChgPct, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty: srCtx.srScorePenalty, volScore: volData.volScore, volLabel: volData.volLabel, trend, trigger, dayType, sr: srCtx, srLevels, event: eventRisk };
     const sig = computeSignal(inputs);
     renderSignal(sig, inputs, logEvent);
 
@@ -6692,9 +6874,6 @@ async function fetchRealOptionPrice(strike, type) {
       oi: parseInt(leg.openInterest || 0),
       volume: parseInt(leg.totalTradedVolume || leg.volume || 0),
       slPrice: Math.max(0.05, Math.round(mid * 0.70 * 20) / 20),
-      t1Price: Math.round(mid * 1.5 * 20) / 20,
-      t2Price: Math.round(mid * 2.0 * 20) / 20,
-      t3Price: Math.round(mid * 2.8 * 20) / 20,
       expiry: expiry.apiDate,
       source: "NSE option chain"
     };
@@ -6713,22 +6892,11 @@ async function updateEntryPriceFromNSE(sig, inputs) {
     document.getElementById("sigEntryRange").textContent  = `Bid:₹${ep.bid} Ask:₹${ep.ask}`;
     document.getElementById("sigExitPrice").textContent   = `₹${ep.slPrice}`;
     document.getElementById("sigExitNote").textContent    = `Exit if falls to ₹${ep.slPrice} (–30%)`;
-
-    // Update targets with real premium base
-    document.getElementById("sigT1").textContent = `₹${ep.t1Price} (~+50%)`;
-    document.getElementById("sigT2").textContent = `₹${ep.t2Price} (~+100%)`;
-    document.getElementById("sigT3").textContent = `₹${ep.t3Price} (~+180%)`;
-    document.getElementById("sigT1").style.color = "#84cc16";
-    document.getElementById("sigT2").style.color = "#22c55e";
-    document.getElementById("sigT3").style.color = "#22c55e";
     document.getElementById("sigSL").textContent = `🛑 SL: Exit at ₹${ep.slPrice} · Entry ~₹${ep.midPrice} (Live NSE) · Max loss ~₹${Math.round((ep.midPrice - ep.slPrice) * NIFTY_LOT_SIZE)} per lot`;
 
-    // Store real entry price on sig for trading log
+    // Store real entry/SL now; targets are rebuilt below with live delta + EM.
     sig.entryMid   = ep.midPrice;
     sig.slPrice    = ep.slPrice;
-    sig.t1Price    = ep.t1Price;
-    sig.t2Price    = ep.t2Price;
-    sig.t3Price    = ep.t3Price;
     sig.entryLive  = true;
 
     // Prefill the editable fill with the live price unless the user is typing.
@@ -6743,12 +6911,32 @@ async function updateEntryPriceFromNSE(sig, inputs) {
 
     let em = null;
     try { em = await fetchExpectedMove(inputs.spot, sig.expiry || getTargetExpiry()); } catch {}
-    if (em) {
-      sig.expMove = em;
-      const delta = Math.max(0.2, q.delta || 0.5);
-      const requiredMove = Math.max(0, (ep.t1Price - ep.midPrice) / delta);
-      sig.emRatio = +(requiredMove / Math.max(1, em.daily)).toFixed(2);
-    }
+    if (em) sig.expMove = em;
+
+    // Rebuild targets from S/R + expected move, now with the live option delta.
+    const targetData = computeSignalTargets({
+      spot: inputs.spot,
+      type: sig.type,
+      entryPremium: ep.midPrice,
+      delta: q.delta || 0.5,
+      levels: inputs.srLevels || [inputs.sr?.above, inputs.sr?.below].filter(Boolean),
+      dailyEM: em?.daily || estimateDailyEM(inputs.spot, inputs.vix),
+      dte: sig.expiry?.daysToExpiry ?? 5,
+    });
+    sig.t1Price = targetData.targets[0].price;
+    sig.t2Price = targetData.targets[1].price;
+    sig.t3Price = targetData.targets[2].price;
+    sig.t1Spot  = targetData.targets[0].spot;
+    sig.t2Spot  = targetData.targets[1].spot;
+    sig.t3Spot  = targetData.targets[2].spot;
+    sig.targets = targetData.targets;
+    sig.targetBasis = targetData.targets.map((t, i) =>
+      `T${i + 1} ${Math.round(t.spot)} (${t.source}) ${t.emRatio.toFixed(2)}×EM`
+    ).join(" / ");
+    sig.emRatio = targetData.targets[0].emRatio;
+    sig.emRatios = targetData.targets.map(t => t.emRatio);
+    sig.dailyEM = em?.daily ?? targetData.em;
+    renderSignalTargets(sig, targetData);
 
     // Update the quality / expected-move input rows
     const siOpt = document.getElementById("si-optq");
@@ -6766,7 +6954,7 @@ async function updateEntryPriceFromNSE(sig, inputs) {
       ? `✓ Option quality OK · Δ ${q.delta} · spread ${q.spreadPct ?? "—"}% · OI ${fmtVol(q.oi)}`
       : `✕ Option quality: ${q.summary}`;
     const emNote = (em && sig.emRatio != null)
-      ? ` · T1 needs ${sig.emRatio.toFixed(2)}× daily EM (±${Math.round(em.daily)} pts)`
+      ? ` · T1 ${sig.emRatio.toFixed(2)}× / T2 ${sig.emRatios[1].toFixed(2)}× / T3 ${sig.emRatios[2].toFixed(2)}× daily EM (±${Math.round(em.daily)} pts)`
       : "";
     document.getElementById("sigEntryNote").innerHTML =
       `<strong style="color:var(--green)">✓ Live NSE Price</strong> · Bid ₹${ep.bid} / Ask ₹${ep.ask} · IV: ${ep.iv?.toFixed(1) || "—"}% · OI: ${ep.oi?.toLocaleString("en-IN") || "—"} ` +
@@ -6813,6 +7001,7 @@ async function updateEntryPriceFromNSE(sig, inputs) {
 
     renderActualEntryNote(sig);
     updateSignalEntryControls();
+    syncCurrentSignalLogTargets(sig).catch(() => {});
 
   } catch(e) {
     console.log("Real option price fetch failed:", e.message);

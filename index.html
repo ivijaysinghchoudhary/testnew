@@ -4105,6 +4105,12 @@ let signalLog = [];
 let notificationsEnabled = false;
 let lastSignalTime = (() => { try { return localStorage.getItem("marketDashboard.lastSignalSlot") || null; } catch { return null; } })();
 
+// Persist the last scheduled signal so a page refresh cannot manufacture a new
+// setup at an arbitrary minute. The signal is restored exactly as generated,
+// with its original 15-minute expiry.
+const SIGNAL_STATE_LS_KEY = "marketDashboard.signalState.v1";
+const SIGNAL_STATE_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+
 function getATM(spot) {
   return Math.round(spot / 50) * 50;
 }
@@ -4155,7 +4161,122 @@ function isSignalTime() {
   if (!s.isTradingDay) return false;
   if (s.mins < 555 || s.mins > s.foClose) return false;
   const slot = currentSignalSlot();
-  return !!slot && slot !== lastSignalTime;
+  if (!slot || slot === lastSignalTime) return false;
+  // Another tab may have generated this slot while this tab was idle. Respect
+  // that persisted slot so two open tabs cannot both create a setup.
+  let stored = null;
+  try { stored = localStorage.getItem("marketDashboard.lastSignalSlot"); } catch {}
+  return slot !== stored;
+}
+
+/* ─── SIGNAL STATE (refresh-safe) ─────────────────────────────────────
+   A scheduled signal is computed once per slot and then cached. A page
+   refresh restores that exact signal (same strike, same planned levels,
+   same 15-minute expiry) instead of recomputing a fresh setup at the
+   current minute. */
+function persistSignalState(sig, inputs) {
+  if (!sig || !inputs) return;
+  try {
+    localStorage.setItem(SIGNAL_STATE_LS_KEY, JSON.stringify({
+      version: 1,
+      date: todayIST(),
+      slotKey: sig.slotKey || lastSignalTime || null,
+      savedAt: Date.now(),
+      sig,
+      inputs,
+    }));
+  } catch (e) {
+    console.warn("Signal state save failed:", e.message);
+  }
+}
+
+function clearSignalState() {
+  try { localStorage.removeItem(SIGNAL_STATE_LS_KEY); } catch {}
+}
+
+function loadSignalState() {
+  try {
+    const raw = localStorage.getItem(SIGNAL_STATE_LS_KEY);
+    if (!raw) return null;
+    const state = JSON.parse(raw);
+    if (state?.version !== 1 || !state?.sig || !state?.inputs ||
+        !state.sig.strikeName || !(state.inputs.spot > 0)) {
+      clearSignalState();
+      return null;
+    }
+    if (state.date !== todayIST()) { clearSignalState(); return null; }
+    if (Date.now() - (+state.savedAt || 0) > SIGNAL_STATE_MAX_AGE_MS) {
+      clearSignalState();
+      return null;
+    }
+    return state;
+  } catch {
+    clearSignalState();
+    return null;
+  }
+}
+
+function findSignalLogEntry(sig) {
+  if (!sig) return null;
+  const slot = sig.slotKey || null;
+  const when = sig.generatedAt ? new Date(sig.generatedAt) : new Date();
+  const date = when.toLocaleDateString("en-IN", {
+    timeZone: "Asia/Kolkata", day: "2-digit", month: "short", year: "numeric",
+  });
+  const time = when.toLocaleTimeString("en-IN", {
+    timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true,
+  });
+  const strike = sig.primaryStrike ? `${sig.primaryStrike} ${sig.type}` : null;
+  return [...tlogEntries].reverse().map(normalizeTlogStatus).find(e => {
+    if (slot && e.signalSlotKey === slot) return true;
+    if (!strike) return false;
+    return (e.status === "SIGNAL" || e.status === "WATCH") &&
+      e.date === date && e.time === time &&
+      e.strike === strike && e.direction === sig.direction;
+  }) || null;
+}
+
+function restoreSignalOnLoad() {
+  const state = loadSignalState();
+  if (!state) return false;
+  const sig = state.sig;
+  const inputs = state.inputs;
+  if (state.slotKey) {
+    lastSignalTime = state.slotKey;
+    try { localStorage.setItem("marketDashboard.lastSignalSlot", lastSignalTime); } catch {}
+  }
+  if (!sig.slotKey) sig.slotKey = state.slotKey || lastSignalTime || null;
+  if (!sig.generatedAt && state.savedAt) sig.generatedAt = state.savedAt;
+  if (!sig.expiresAt && sig.generatedAt) {
+    sig.expiresAt = sig.generatedAt + SIGNAL_VALIDITY_MIN * 60000;
+  }
+  const wasExpired = !!sig.expiresAt && Date.now() > +sig.expiresAt;
+  if (wasExpired) {
+    sig.actionable = false;
+    sig.waitReason = "15-minute entry window expired — waiting for the next scheduled signal";
+    sig.cardClass = "wait";
+  }
+  try {
+    renderSignal(sig, inputs, false);
+  } catch (e) {
+    console.warn("Signal restore failed:", e.message);
+    clearSignalState();
+    lastSignalTime = null;
+    try { localStorage.removeItem("marketDashboard.lastSignalSlot"); } catch {}
+    return false;
+  }
+  if (wasExpired) persistSignalState(sig, inputs);
+  const entry = findSignalLogEntry(sig);
+  if (entry) {
+    currentSignalTlogId = entry.id;
+    if (entry.entryTaken || entry.status === "OPEN" || entry.status === "CLOSED") {
+      sig.entryLocked = true;
+      updateSignalEntryControls();
+      persistSignalState(sig, inputs);
+    }
+    syncCurrentSignalLogTargets(sig).catch(() => {});
+  }
+  return true;
 }
 
 /* ─── MARKET REGIME CLASSIFIER ─── */
@@ -4539,6 +4660,7 @@ function buildTriggerContext(priceData, volData, opts = {}) {
   const vwap5 = vv > 0 ? pv / vv : bars.reduce((s, b) => s + b.tp, 0) / bars.length;
 
   const last = bars[bars.length - 1];
+  const prev = bars.length >= 2 ? bars[bars.length - 2] : null;
   const priorVols = bars.slice(0, -1).slice(-20).map(b => b.v).filter(v => v > 0);
   let volZ = 0;
   if (priorVols.length >= 5) {
@@ -4555,6 +4677,13 @@ function buildTriggerContext(priceData, volData, opts = {}) {
     lastLow: last.l,
     lastMin: last.min,
     lastVol: last.v,
+    // Previous completed 5m bar — needed to distinguish a fresh cross from
+    // merely being on the same side of a level for hours.
+    prevClose: prev?.c ?? null,
+    prevOpen: prev?.o ?? null,
+    prevHigh: prev?.h ?? null,
+    prevLow: prev?.l ?? null,
+    prevMin: prev?.min ?? null,
     volZ: +volZ.toFixed(2),
     vwap5,
     barTime: `${String(Math.floor(last.min / 60)).padStart(2, "0")}:${String(last.min % 60).padStart(2, "0")}`,
@@ -4594,30 +4723,45 @@ function triggerFor(type, trend, trig) {
   const bullBar = trig.lastClose > trig.lastOpen;
   const bearBar = trig.lastClose < trig.lastOpen;
   const volOK   = trig.volZ >= 0.5;
-  const pdhBreak = trend.pdh != null && trig.lastClose > trend.pdh;
-  const pdlBreak = trend.pdl != null && trig.lastClose < trend.pdl;
+
+  // A level break is only a trigger on the bar that actually crosses it.
+  // Being below PDL (or above PDH) for hours is not a fresh breakout.
+  const pdhFresh = trend.pdh != null && trig.prevClose != null &&
+    trig.prevClose <= trend.pdh && trig.lastClose > trend.pdh;
+  const pdlFresh = trend.pdl != null && trig.prevClose != null &&
+    trig.prevClose >= trend.pdl && trig.lastClose < trend.pdl;
+  const pdhStale = trend.pdh != null && trig.lastClose > trend.pdh && !pdhFresh;
+  const pdlStale = trend.pdl != null && trig.lastClose < trend.pdl && !pdlFresh;
 
   if (type === "CE") {
     const aboveVWAP = trig.lastClose > trend.vwap;
-    const ok = (aboveVWAP && bullBar && volOK) || (pdhBreak && bullBar && trig.volZ >= 0);
+    const ok = (aboveVWAP && bullBar && volOK) || (pdhFresh && bullBar && volOK);
     let reason = "confirmed: 5m close above VWAP, bullish bar, volume";
     if (!ok) {
-      if (!aboveVWAP && !pdhBreak) reason = `5m close ${Math.round(trig.lastClose)} is not above VWAP ${Math.round(trend.vwap)}`;
-      else if (!bullBar)           reason = "last 5m bar closed below its open";
-      else if (!volOK)             reason = `volume z-score ${trig.volZ} < 0.5`;
+      if (!aboveVWAP && !pdhFresh) {
+        reason = pdhStale
+          ? `5m close is above PDH ${Math.round(trend.pdh)} but the break is stale — need a fresh cross with volume`
+          : `5m close ${Math.round(trig.lastClose)} is not above VWAP ${Math.round(trend.vwap)}`;
+      }
+      else if (!bullBar) reason = "last 5m bar closed below its open";
+      else if (!volOK)   reason = `volume z-score ${trig.volZ} < 0.5`;
     }
-    return { available: true, ok, reason, volZ: trig.volZ, lastClose: trig.lastClose, barTime: trig.barTime };
+    return { available: true, ok, reason, volZ: trig.volZ, lastClose: trig.lastClose, prevClose: trig.prevClose, barTime: trig.barTime, freshBreak: pdhFresh, staleBreak: pdhStale };
   }
   if (type === "PE") {
     const belowVWAP = trig.lastClose < trend.vwap;
-    const ok = (belowVWAP && bearBar && volOK) || (pdlBreak && bearBar && trig.volZ >= 0);
+    const ok = (belowVWAP && bearBar && volOK) || (pdlFresh && bearBar && volOK);
     let reason = "confirmed: 5m close below VWAP, bearish bar, volume";
     if (!ok) {
-      if (!belowVWAP && !pdlBreak) reason = `5m close ${Math.round(trig.lastClose)} is not below VWAP ${Math.round(trend.vwap)}`;
-      else if (!bearBar)           reason = "last 5m bar closed above its open";
-      else if (!volOK)             reason = `volume z-score ${trig.volZ} < 0.5`;
+      if (!belowVWAP && !pdlFresh) {
+        reason = pdlStale
+          ? `5m close is below PDL ${Math.round(trend.pdl)} but the break is stale — need a fresh cross with volume`
+          : `5m close ${Math.round(trig.lastClose)} is not below VWAP ${Math.round(trend.vwap)}`;
+      }
+      else if (!bearBar) reason = "last 5m bar closed above its open";
+      else if (!volOK)   reason = `volume z-score ${trig.volZ} < 0.5`;
     }
-    return { available: true, ok, reason, volZ: trig.volZ, lastClose: trig.lastClose, barTime: trig.barTime };
+    return { available: true, ok, reason, volZ: trig.volZ, lastClose: trig.lastClose, prevClose: trig.prevClose, barTime: trig.barTime, freshBreak: pdlFresh, staleBreak: pdlStale };
   }
   return { available: false, ok: false, reason: "no direction" };
 }
@@ -4961,7 +5105,7 @@ function renderSignalTargets(sig, data) {
 }
 
 // Core signal logic — v2 with corrected factors
-function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty, volScore, volLabel, trend, trigger, dayType, noTrade }) {
+function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty, volScore, volLabel, trend, trigger, dayType, sr, noTrade }) {
   const dayChgPct = ((spot - prevClose) / prevClose * 100);
   const atm = getATM(spot);
 
@@ -5131,6 +5275,59 @@ function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, brea
     }
   }
 
+  // Hard S/R gate: do not enter directly into the level. A PE at support (or a
+  // CE at resistance) must show a fresh 5m cross of that level with volume,
+  // not merely be near it after an extended move.
+  if (type && sr?.nearestLevel) {
+    const nearLevel = sr.nearestLevel;
+    const nearSide  = sr.nearestSide;
+    const nearDist  = +sr.nearestDist;
+    const nearLimit = 0.25; // percent
+    const atSupport    = type === "PE" && nearSide === "support" && nearDist <= nearLimit;
+    const atResistance = type === "CE" && nearSide === "resistance" && nearDist <= nearLimit;
+    if (atSupport || atResistance) {
+      const freshLevelBreak = type === "PE"
+        ? (trigger?.prevClose != null && trigger.prevClose >= nearLevel.price && trigger.lastClose < nearLevel.price)
+        : (trigger?.prevClose != null && trigger.prevClose <= nearLevel.price && trigger.lastClose > nearLevel.price);
+      if (!freshLevelBreak) {
+        actionable = false;
+        const msg = `${type} is ${nearDist.toFixed(2)}% from ${nearSide} ${nearLevel.price} — need a fresh break with volume, not a late entry into the level`;
+        waitReason = waitReason ? `${waitReason}; ${msg}` : `WAIT — ${msg}`;
+        warnings.push(`⛔ ${msg}`);
+        flags.push(`⛔ ${msg}`);
+        cardClass = "wait";
+      }
+    }
+  }
+
+  // Strong 5m VWAP reclaim against the current bias invalidates the setup.
+  // This is deliberately an invalidation, not an automatic flip: a reversal
+  // entry needs its own confirmed trigger and target.
+  let reversalGuard = null;
+  if (type && trigger?.available && trend?.available) {
+    const bullReclaim = trigger.lastClose > trend.vwap &&
+      trigger.prevClose != null && trigger.lastClose > trigger.prevClose &&
+      trigger.volZ >= 1.0;
+    const bearReclaim = trigger.lastClose < trend.vwap &&
+      trigger.prevClose != null && trigger.lastClose < trigger.prevClose &&
+      trigger.volZ >= 1.0;
+    if (type === "PE" && bullReclaim) {
+      reversalGuard = "up";
+      actionable = false;
+      waitReason = "WAIT — bullish VWAP reclaim with volume; PE bias invalidated";
+      warnings.push("🔄 Reversal risk: 5m close above VWAP with volume — PE setup invalidated");
+      flags.push("🔄 Reversal: PE invalidated — wait for a confirmed CE setup");
+      cardClass = "wait";
+    } else if (type === "CE" && bearReclaim) {
+      reversalGuard = "down";
+      actionable = false;
+      waitReason = "WAIT — bearish VWAP loss with volume; CE bias invalidated";
+      warnings.push("🔄 Reversal risk: 5m close below VWAP with volume — CE setup invalidated");
+      flags.push("🔄 Reversal: CE invalidated — wait for a confirmed PE setup");
+      cardClass = "wait";
+    }
+  }
+
   // Day-type gate: breakout chasing fails in ranges; counter-trend fails in trends.
   if (type && dayType) {
     const rangeBreakout = dayType.type === "range" &&
@@ -5252,7 +5449,7 @@ function computeSignal({ spot, prevClose, vix, vixPercentile, pcr, adRatio, brea
     sl = "🛑 Stay out — low conviction";
   }
 
-  return { direction, type, confidence, confClass, cardClass, emoji, strikeName, t1, t2, t3, sl, reasons, warnings, flags, score, highRisk, atm, expiry, primaryStrike, canConsiderOTM, strongConviction, ivrFlag, gapFlag, highVolRegime, trend, actionable, waitReason, bias, trigger: triggerInfo, dayType, noTrade: nt };
+  return { direction, type, confidence, confClass, cardClass, emoji, strikeName, t1, t2, t3, sl, reasons, warnings, flags, score, highRisk, atm, expiry, primaryStrike, canConsiderOTM, strongConviction, ivrFlag, gapFlag, highVolRegime, trend, actionable, waitReason, bias, trigger: triggerInfo, dayType, noTrade: nt, reversalGuard };
 }
 
 /* ─── PROBABILITY SCORE (0–10) ─── */
@@ -5412,7 +5609,8 @@ function computeSetupQuality(sig, inputs, ctx = {}) {
   if (!trend?.available) finalScore = Math.min(finalScore, 7);
   // R:R and event risk act as gates, not just points — plenty of trend + time
   // value should not produce an "A+" when there is no room to the next level.
-  if (rr < 1)        finalScore = Math.min(finalScore, 6);
+  // A sub-1 R:R is not a "B" setup; it is paper-only regardless of trend.
+  if (rr < 1)        finalScore = Math.min(finalScore, 4);
   else if (rr < 1.3) finalScore = Math.min(finalScore, 7);
   if (ev.level === 0) finalScore = Math.min(finalScore, 5);
   // WAIT-only signals are watchable, never full-size.
@@ -5423,6 +5621,26 @@ function computeSetupQuality(sig, inputs, ctx = {}) {
   // target is unrealistic for the session.
   if (ctx.emRatio > 1.2)      finalScore = Math.min(finalScore, 3);
   else if (ctx.emRatio > 0.8) finalScore = Math.min(finalScore, 6);
+
+  // Hard risk-context caps. These are deliberately caps, not points: a great
+  // trend/DTE reading must not upgrade a trade that is sitting on a level or
+  // entering during the lunch chop.
+  const sr = ctx.sr || inputs.sr;
+  const noTrade = ctx.noTrade || sig.noTrade;
+  const nearSR = sr?.nearestLevel && sr?.nearestDist != null && +sr.nearestDist <= 0.25;
+  if (nearSR) {
+    finalScore = Math.min(finalScore, 4);
+    breakdown.push({ label: `S/R ${(+sr.nearestDist).toFixed(2)}% away — paper only`, pts: 0, cls: "neg" });
+  }
+  if (noTrade?.penalty) {
+    finalScore = Math.min(finalScore, 4);
+    breakdown.push({ label: `${noTrade.label || "Chop window"} — paper only`, pts: 0, cls: "neg" });
+  }
+  const triggerVolZ = ctx.triggerVolZ ?? inputs.trigger?.volZ;
+  if (triggerVolZ != null && triggerVolZ < 0.5) {
+    finalScore = Math.min(finalScore, 4);
+    breakdown.push({ label: `Trigger volume z ${triggerVolZ} < 0.5 — paper only`, pts: 0, cls: "neg" });
+  }
 
   let label, color;
   if (finalScore >= 8)      { label = "A/A+ Setup — normal size";                  color = "#22c55e"; }
@@ -5471,52 +5689,124 @@ function renderSignal(sig, inputs, logEvent = true) {
   const card = document.getElementById("sigCard");
   const now = new Date(new Date().toLocaleString("en-US", { timeZone: "Asia/Kolkata" }));
   const timeStr = now.toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
-  const waiting = sig.actionable === false && !!sig.type;
+  const nowMs = Date.now();
+  const expiresAtMs = +sig.expiresAt || (nowMs + SIGNAL_VALIDITY_MIN * 60000);
+  const expired = !!sig.expiresAt && nowMs > +sig.expiresAt;
+  if (expired) {
+    sig.actionable = false;
+    sig.waitReason = "15-minute entry window expired — scrapped";
+    sig.cardClass = "wait";
+  }
+  const generatedTimeStr = sig.generatedAt
+    ? new Date(sig.generatedAt).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true })
+    : timeStr;
   const openPos = getOpenPosition();
+  const openBlocks = !!openPos && !!sig.type;
+  const waiting = ((sig.actionable === false || expired) && !!sig.type) || openBlocks;
+  const executable = sig.actionable !== false && !expired && !sig.entryLocked && !openPos;
 
   // Probability score is computed after the entry/SL block below, because
   // the R:R factor needs the actual premium and stop distance.
 
-  // Entry price via Black-Scholes (shown first as fast estimate)
+  // Entry price via Black-Scholes (shown first as fast estimate). A restored
+  // signal already has a cached plan, so keep those exact levels instead of
+  // re-pricing them from the current market.
   if (sig.type && sig.primaryStrike) {
-    const ep = calcOptionEntry(inputs.spot, sig.primaryStrike, sig.type, sig.expiry?.daysToExpiry ?? 5, inputs.vix);
-    const targetData = computeSignalTargets({
-      spot: inputs.spot,
-      type: sig.type,
-      entryPremium: ep.entryMid,
-      delta: ep.delta,
-      levels: inputs.srLevels || [],
-      dailyEM: estimateDailyEM(inputs.spot, inputs.vix),
-      dte: sig.expiry?.daysToExpiry ?? 5,
-    });
+    const cachedPlan = (!logEvent && +sig.entryMid > 0 && +sig.slPrice > 0 &&
+      +sig.t1Price > 0 && +sig.t2Price > 0 && +sig.t3Price > 0)
+      ? {
+          entryMid: +sig.entryMid,
+          slPrice: +sig.slPrice,
+          t1Price: +sig.t1Price,
+          t2Price: +sig.t2Price,
+          t3Price: +sig.t3Price,
+          t1Spot: +sig.t1Spot,
+          t2Spot: +sig.t2Spot,
+          t3Spot: +sig.t3Spot,
+          targets: Array.isArray(sig.targets) ? sig.targets : null,
+          targetBasis: sig.targetBasis,
+          emRatio: sig.emRatio,
+          emRatios: sig.emRatios,
+          dailyEM: sig.dailyEM,
+        }
+      : null;
 
-    sig.entryMid = ep.entryMid;
-    sig.slPrice  = ep.slPrice;
-    sig.t1Price  = targetData.targets[0].price;
-    sig.t2Price  = targetData.targets[1].price;
-    sig.t3Price  = targetData.targets[2].price;
-    sig.t1Spot   = targetData.targets[0].spot;
-    sig.t2Spot   = targetData.targets[1].spot;
-    sig.t3Spot   = targetData.targets[2].spot;
-    sig.targets  = targetData.targets;
-    sig.targetBasis = targetData.targets.map((t, i) =>
-      `T${i + 1} ${Math.round(t.spot)} (${t.source}) ${t.emRatio.toFixed(2)}×EM`
-    ).join(" / ");
-    sig.emRatio  = targetData.targets[0].emRatio;
-    sig.emRatios = targetData.targets.map(t => t.emRatio);
-    sig.dailyEM  = targetData.em;
+    let targetData;
+    if (cachedPlan) {
+      const targets = cachedPlan.targets?.length === 3
+        ? cachedPlan.targets
+        : [
+            { price: cachedPlan.t1Price, spot: cachedPlan.t1Spot || inputs.spot, emRatio: cachedPlan.emRatios?.[0] ?? 0, source: "cached" },
+            { price: cachedPlan.t2Price, spot: cachedPlan.t2Spot || inputs.spot, emRatio: cachedPlan.emRatios?.[1] ?? 0, source: "cached" },
+            { price: cachedPlan.t3Price, spot: cachedPlan.t3Spot || inputs.spot, emRatio: cachedPlan.emRatios?.[2] ?? 0, source: "cached" },
+          ];
+      const withPct = targets.map(t => ({
+        ...t,
+        pct: cachedPlan.entryMid > 0 ? +((t.price / cachedPlan.entryMid - 1) * 100).toFixed(1) : 0,
+      }));
+      sig.entryMid = cachedPlan.entryMid;
+      sig.slPrice = cachedPlan.slPrice;
+      sig.t1Price = cachedPlan.t1Price;
+      sig.t2Price = cachedPlan.t2Price;
+      sig.t3Price = cachedPlan.t3Price;
+      sig.t1Spot = cachedPlan.t1Spot;
+      sig.t2Spot = cachedPlan.t2Spot;
+      sig.t3Spot = cachedPlan.t3Spot;
+      sig.targets = withPct;
+      sig.targetBasis = cachedPlan.targetBasis;
+      sig.emRatio = cachedPlan.emRatio;
+      sig.emRatios = cachedPlan.emRatios;
+      sig.dailyEM = cachedPlan.dailyEM;
+      targetData = { targets: withPct, delta: +(sig.optionQ?.delta || 0.5) };
+    } else {
+      const ep = calcOptionEntry(inputs.spot, sig.primaryStrike, sig.type, sig.expiry?.daysToExpiry ?? 5, inputs.vix);
+      targetData = computeSignalTargets({
+        spot: inputs.spot,
+        type: sig.type,
+        entryPremium: ep.entryMid,
+        delta: ep.delta,
+        levels: inputs.srLevels || [],
+        dailyEM: estimateDailyEM(inputs.spot, inputs.vix),
+        dte: sig.expiry?.daysToExpiry ?? 5,
+      });
 
-    document.getElementById("sigEntryPrice").textContent  = `₹${ep.entryMid} (BS est.)`;
-    document.getElementById("sigEntryRange").textContent  = `Range: ₹${ep.entryLow} – ₹${ep.entryHigh}`;
-    document.getElementById("sigExitPrice").textContent   = `₹${ep.slPrice}`;
-    document.getElementById("sigExitNote").textContent    = `Exit if falls to ₹${ep.slPrice} (–30%)`;
-    document.getElementById("sigEntryNote").innerHTML     =
-      `⟳ Fetching NSE option quote... (Black-Scholes est: ₹${ep.entryMid})`;
-    document.getElementById("sigSL").textContent = `🛑 SL: Exit at ₹${ep.slPrice} · Entry ~₹${ep.entryMid} · Max loss ~₹${Math.round((ep.entryMid - ep.slPrice) * NIFTY_LOT_SIZE)} per lot`;
+      sig.entryMid = ep.entryMid;
+      sig.slPrice  = ep.slPrice;
+      sig.t1Price  = targetData.targets[0].price;
+      sig.t2Price  = targetData.targets[1].price;
+      sig.t3Price  = targetData.targets[2].price;
+      sig.t1Spot   = targetData.targets[0].spot;
+      sig.t2Spot   = targetData.targets[1].spot;
+      sig.t3Spot   = targetData.targets[2].spot;
+      sig.targets  = targetData.targets;
+      sig.targetBasis = targetData.targets.map((t, i) =>
+        `T${i + 1} ${Math.round(t.spot)} (${t.source}) ${t.emRatio.toFixed(2)}×EM`
+      ).join(" / ");
+      sig.emRatio  = targetData.targets[0].emRatio;
+      sig.emRatios = targetData.targets.map(t => t.emRatio);
+      sig.dailyEM  = targetData.em;
+    }
+
+    document.getElementById("sigEntryPrice").textContent  = cachedPlan
+      ? `₹${sig.entryMid}`
+      : `₹${sig.entryMid} (BS est.)`;
+    document.getElementById("sigEntryRange").textContent  = cachedPlan
+      ? (sig.liveBid > 0 && sig.liveAsk > 0
+          ? `Bid:₹${sig.liveBid} Ask:₹${sig.liveAsk}${sig.liveQuoteTs ? " · NSE " + formatNseQuoteClock(sig.liveQuoteTs) : ""}`
+          : "Restored planned entry")
+      : `Range: ₹${calcOptionEntry(inputs.spot, sig.primaryStrike, sig.type, sig.expiry?.daysToExpiry ?? 5, inputs.vix).entryLow} – ₹${calcOptionEntry(inputs.spot, sig.primaryStrike, sig.type, sig.expiry?.daysToExpiry ?? 5, inputs.vix).entryHigh}`;
+    document.getElementById("sigExitPrice").textContent   = `₹${sig.slPrice}`;
+    document.getElementById("sigExitNote").textContent    = `Exit if falls to ₹${sig.slPrice} (–30%)`;
+    document.getElementById("sigEntryNote").innerHTML     = cachedPlan
+      ? "Restored scheduled signal — planned levels from generation time."
+      : `⟳ Fetching NSE option quote... (Black-Scholes est: ₹${sig.entryMid})`;
+    document.getElementById("sigSL").textContent = `🛑 SL: Exit at ₹${sig.slPrice} · Entry ~₹${sig.entryMid} · Max loss ~₹${Math.round((sig.entryMid - sig.slPrice) * NIFTY_LOT_SIZE)} per lot`;
     renderSignalTargets(sig, targetData);
 
-    // Then fetch real NSE price and override BS estimate
-    updateEntryPriceFromNSE(sig, inputs);
+    // Then fetch real NSE price and override BS estimate. An expired restored
+    // signal is display-only: keep its cached plan instead of re-pricing it
+    // against the current (possibly much later) market.
+    if (!expired) updateEntryPriceFromNSE(sig, inputs);
   } else {
     ["sigEntryPrice","sigEntryRange","sigExitPrice","sigExitNote","sigEntryNote"].forEach(id => {
       const el = document.getElementById(id);
@@ -5538,6 +5828,9 @@ function renderSignal(sig, inputs, logEvent = true) {
     event: inputs.event || getEventRisk(),
     option: sig.optionQ || null,
     emRatio: sig.emRatio ?? null,
+    sr: inputs.sr || null,
+    noTrade: sig.noTrade || inputs.noTrade || null,
+    triggerVolZ: inputs.trigger?.volZ ?? null,
   };
   const prob = computeSetupQuality(sig, inputs, sig.probCtx);
   renderProbabilityScore(prob);
@@ -5545,7 +5838,8 @@ function renderSignal(sig, inputs, logEvent = true) {
 
   // Surface major-event risk in the warning list (score already penalises it)
   if (inputs.event?.level <= 1 && inputs.event?.note) {
-    sig.warnings.push(`⚠ Event risk — ${inputs.event.label}: ${inputs.event.note}`);
+    const eventWarning = `⚠ Event risk — ${inputs.event.label}: ${inputs.event.note}`;
+    if (!sig.warnings.includes(eventWarning)) sig.warnings.push(eventWarning);
   }
 
   // Card style
@@ -5555,7 +5849,11 @@ function renderSignal(sig, inputs, logEvent = true) {
   const wb = document.getElementById("sigWaitBanner");
   if (waiting) {
     wb.style.display = "block";
-    wb.textContent = `⏳ ${sig.waitReason} — do not enter until the trigger confirms.`;
+    wb.textContent = expired
+      ? `⏳ ${sig.waitReason} — signal expired; no entry.`
+      : sig.actionable === false
+        ? `⏳ ${sig.waitReason} — do not enter until the trigger confirms.`
+        : `⏳ Position already open — this ${sig.type} signal is watch-only.`;
   } else if (!sig.type && sig.waitReason) {
     wb.style.display = "block";
     wb.textContent = `🚫 ${sig.waitReason}`;
@@ -5564,21 +5862,30 @@ function renderSignal(sig, inputs, logEvent = true) {
     wb.textContent = "";
   }
 
-  const displayDir = waiting ? `⏳ WAIT — ${sig.type} bias` : `${sig.emoji} ${sig.direction}`;
+  const displayDir = expired ? `⏳ EXPIRED — ${sig.type} bias`
+    : (sig.actionable === false && sig.type) ? `⏳ WAIT — ${sig.type} bias`
+    : openBlocks ? `⏳ WATCH ONLY — ${sig.type} bias`
+    : `${sig.emoji} ${sig.direction}`;
   document.getElementById("sigDirection").textContent = displayDir;
-  document.getElementById("sigDirection").style.color = waiting ? "#f59e0b"
+  document.getElementById("sigDirection").style.color = (waiting || expired) ? "#f59e0b"
     : sig.type === "CE" ? "#22c55e" : sig.type === "PE" ? "#ef4444" : "#f59e0b";
 
-  const validUntil = new Date(now.getTime() + SIGNAL_VALIDITY_MIN * 60000)
-    .toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit", hour12: true });
-  document.getElementById("sigSubtitle").textContent = waiting
+  const validUntil = new Date(expiresAtMs)
+    .toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true });
+  document.getElementById("sigSubtitle").textContent = expired
     ? `${sig.waitReason}`
-    : sig.type
-      ? `Signal generated at ${timeStr} · entry valid ${SIGNAL_VALIDITY_MIN} min (until ${validUntil})`
-      : (sig.waitReason || `Signal generated at ${timeStr} — no trade`);
+    : openBlocks && sig.actionable !== false
+      ? `Position already open — this ${sig.type} signal is watch-only`
+      : sig.actionable === false
+        ? `${sig.waitReason}`
+        : sig.type
+          ? `Signal generated at ${generatedTimeStr} · entry valid ${SIGNAL_VALIDITY_MIN} min (until ${validUntil})`
+          : (sig.waitReason || `Signal generated at ${generatedTimeStr} — no trade`);
 
-  document.getElementById("sigConfBadge").textContent = waiting ? "● WATCH ONLY" : "● " + sig.confidence + " CONFIDENCE";
-  document.getElementById("sigConfBadge").className   = "sig-confidence " + (waiting ? "conf-medium" : sig.confClass);
+  document.getElementById("sigConfBadge").textContent = expired ? "● EXPIRED"
+    : (waiting || openBlocks) ? "● WATCH ONLY"
+    : "● " + sig.confidence + " CONFIDENCE";
+  document.getElementById("sigConfBadge").className   = "sig-confidence " + ((waiting || expired || openBlocks) ? "conf-medium" : sig.confClass);
 
   // Render strike with line breaks and DTE badge
   const lines = sig.strikeName.split("\n");
@@ -5659,7 +5966,7 @@ function renderSignal(sig, inputs, logEvent = true) {
     siEm.style.color = sig.emRatio > 1.2 ? "#ef4444" : sig.emRatio > 0.8 ? "#f59e0b" : "#22c55e";
   }
   document.getElementById("si-atm").textContent     = sig.atm + " (ATM)";
-  document.getElementById("si-time").textContent    = timeStr;
+  document.getElementById("si-time").textContent    = generatedTimeStr;
 
   // Editable execution block — the fill is yours; SL/targets stay planned.
   const entryInput = document.getElementById("sigEntryInput");
@@ -5669,12 +5976,18 @@ function renderSignal(sig, inputs, logEvent = true) {
     if (!sig.entryLocked && document.activeElement !== entryInput) {
       entryInput.value = sig.entryMid ?? "";
     }
-    entryInput.disabled = !sig.actionable || !!openPos;
-    confirmBtn.disabled = !sig.actionable || !!openPos;
-    liveBtn.disabled    = !sig.actionable;
-    document.getElementById("sigEntryValidity").textContent = sig.actionable
-      ? `Valid ${SIGNAL_VALIDITY_MIN}m · until ${validUntil}`
-      : "WAIT — not executable";
+    entryInput.disabled = !executable || !!openPos || !!sig.entryLocked;
+    confirmBtn.disabled = !executable || !!openPos || !!sig.entryLocked;
+    liveBtn.disabled    = !executable || !!sig.entryLocked;
+    document.getElementById("sigEntryValidity").textContent = openPos
+      ? "Position already open"
+      : sig.entryLocked
+        ? "Signal already taken"
+        : expired
+          ? "EXPIRED — not executable"
+          : executable
+            ? `Valid ${SIGNAL_VALIDITY_MIN}m · until ${validUntil}`
+            : "WAIT — not executable";
   } else {
     entryInput.value = "";
     entryInput.disabled = true;
@@ -5703,6 +6016,8 @@ function renderSignal(sig, inputs, logEvent = true) {
     }
   }
 
+  if (!sig.expiresAt) sig.expiresAt = expiresAtMs;
+  if (logEvent) persistSignalState(sig, inputs);
   document.getElementById("sigNextTime").textContent = getNextSignalTime();
 }
 
@@ -5941,6 +6256,7 @@ async function tlogWrite(entries, sha) {
 
 let tlogEntries = [];
 let tlogSHA     = null;
+let tlogReadyPromise = null;
 
 async function tlogLoad() {
   const el = document.getElementById("tlogStorageStatus");
@@ -5953,6 +6269,18 @@ async function tlogLoad() {
   tlogExpireSignals();
   renderTlog();
   renderOpenPosition();
+  if (currentSignal) {
+    const signalEntry = findSignalLogEntry(currentSignal);
+    if (signalEntry) {
+      currentSignalTlogId = signalEntry.id;
+      if (signalEntry.entryTaken || signalEntry.status === "OPEN" || signalEntry.status === "CLOSED") {
+        currentSignal.entryLocked = true;
+        persistSignalState(currentSignal, currentSignalInputs);
+      }
+      syncCurrentSignalLogTargets(currentSignal).catch(() => {});
+    }
+    updateSignalEntryControls();
+  }
   if (el) {
     el.textContent = entries.length
       ? `✓ ${entries.length} entries (${source === "github" ? "GitHub" : "local"})`
@@ -6119,7 +6447,6 @@ function updateTlogStats() {
   set("tlog-best",    bestPnl !== null ? "+" + bestPnl + "%" : "—");
   set("tlog-skipped", skipped.length);
   set("tlog-missed",  missed.length);
-  set("tlog-winrate", winRate !== null ? winRate + "%" : "—");
 
   const wrEl = document.getElementById("tlog-winrate");
   if (wrEl) wrEl.style.color = winRate >= 55 ? "#22c55e" : winRate >= 45 ? "#f59e0b" : "#ef4444";
@@ -6196,7 +6523,7 @@ async function tlogAddEntry(sig, inputs, prob) {
     status = "WATCH"; outcome = "WATCH"; waitReason = "Another signal is still valid — watch only";
   } else {
     status = "SIGNAL"; outcome = "SIGNAL";
-    expiresAt = Date.now() + SIGNAL_VALIDITY_MIN * 60000;
+    expiresAt = sig.expiresAt || (Date.now() + SIGNAL_VALIDITY_MIN * 60000);
   }
 
   const entry = {
@@ -6213,6 +6540,18 @@ async function tlogAddEntry(sig, inputs, prob) {
     strike:     sig.primaryStrike ? `${sig.primaryStrike} ${sig.type}` : `${sig.atm} ${sig.type || ""}`,
     strikeValue: sig.primaryStrike ?? sig.atm ?? null,
     strikeType:  sig.type ?? null,
+    signalSlotKey: sig.slotKey || null,
+    signalExpiresAt: sig.expiresAt || null,
+    signalGeneratedAt: sig.generatedAt || null,
+    triggerVolZ: sig.trigger?.volZ ?? null,
+    triggerOk: sig.trigger?.ok ?? null,
+    triggerReason: sig.trigger?.reason ?? null,
+    reversalGuard: sig.reversalGuard ?? null,
+    vwap: inputs.trend?.vwap ?? null,
+    pdh: inputs.trend?.pdh ?? null,
+    pdl: inputs.trend?.pdl ?? null,
+    srNearest: inputs.sr?.nearestLevel?.price ?? null,
+    srDistPct: inputs.sr?.nearestDist ?? null,
     entryPrice,
     entrySource,
     quoteTs,
@@ -6242,6 +6581,7 @@ async function tlogAddEntry(sig, inputs, prob) {
     mfe: 0,
     mae: 0,
     partials: [],
+    breakevenArmed: false,
     volRatio:   vol.volRatio,
     volLabel:   vol.volLabel,
     volClass:   vol.volClass,
@@ -6290,6 +6630,15 @@ async function tlogConfirmEntry(id, price) {
   if (!entry) return false;
   normalizeTlogStatus(entry);
   if (entry.status === "OPEN") return true;
+  if (entry.status === "SIGNAL" && entry.expiresAt && entry.expiresAt < Date.now()) {
+    entry.status = "EXPIRED";
+    entry.outcome = "MISSED";
+    entry.waitReason = "15-minute entry window expired — scrapped";
+    renderTlog();
+    tlogSaveAll().catch(() => {});
+    alert("This signal has expired. Wait for the next scheduled signal.");
+    return false;
+  }
   const open = getOpenPosition();
   if (open && open.id !== id) {
     alert("A position is already open. Close it before taking another.");
@@ -6326,8 +6675,9 @@ async function tlogConfirmEntry(id, price) {
   entry.mfe         = entry.entryPrice;
   entry.mae         = entry.entryPrice;
   entry.partials    = [];
+  entry.breakevenArmed = false;
   const slip = entry.plannedEntry > 0 ? ((entry.entryPrice - entry.plannedEntry) / entry.plannedEntry * 100) : 0;
-  entry.notes = `Fill ₹${entry.entryPrice} vs planned ₹${entry.plannedEntry}${Math.abs(slip) > 3 ? ` (${slip > 0 ? "+" : ""}${slip.toFixed(1)}% late)` : ""} · SL/T1 frozen at plan`;
+  entry.notes = `Fill ₹${entry.entryPrice} vs planned ₹${entry.plannedEntry}${Math.abs(slip) > 2.5 ? ` (${slip > 0 ? "+" : ""}${slip.toFixed(1)}% late)` : ""} · SL/T1 frozen at plan`;
 
   renderTlog();
   renderOpenPosition();
@@ -6340,8 +6690,9 @@ async function tlogTakeFromRow(id) {
   const price = parseFloat(input?.value);
   if (!(price > 0)) { alert("Enter your actual fill price first."); return; }
   const ok = await tlogConfirmEntry(id, price);
-  if (ok && currentSignal) {
+  if (ok && currentSignal && currentSignalTlogId === id) {
     currentSignal.entryLocked = true;
+    persistSignalState(currentSignal, currentSignalInputs);
     renderActualEntryNote(currentSignal);
     updateSignalEntryControls();
   }
@@ -6387,7 +6738,7 @@ function renderOpenPosition() {
       <div class="open-pos-cell"><div class="k">Entry</div><div class="v">₹${open.entryPrice}</div></div>
       <div class="open-pos-cell"><div class="k">Live</div><div class="v" id="openPosLive">₹${px ?? "—"}${qmeta.quoteLabel ? `<div style="font-size:0.55rem;color:${qmeta.quoteColor}" title="NSE option-chain timestamp">${qmeta.quoteLabel}</div>` : ""}</div></div>
       <div class="open-pos-cell"><div class="k">P&L</div><div class="v" id="openPosPnl" style="color:${color}">${pnlPct == null ? "—" : (pnlPct > 0 ? "+" : "") + pnlPct.toFixed(1) + "%"}</div></div>
-      <div class="open-pos-cell"><div class="k">SL (frozen)</div><div class="v" style="color:#ef4444">₹${open.slPrice ?? "—"}</div></div>
+      <div class="open-pos-cell"><div class="k">SL (active)</div><div class="v" style="color:#ef4444">₹${open.slPrice ?? "—"}${open.plannedSl && +open.plannedSl !== +open.slPrice ? `<div style="font-size:0.55rem;color:var(--muted2)">plan ₹${open.plannedSl}</div>` : ""}${open.breakevenArmed ? `<div style="font-size:0.55rem;color:#22c55e">breakeven armed</div>` : ""}</div></div>
       <div class="open-pos-cell"><div class="k">T1 / T2 / T3</div><div class="v">₹${open.t1Price ?? "—"} / ₹${open.t2Price ?? "—"} / ₹${open.t3Price ?? "—"}</div></div>
       <div class="open-pos-cell"><div class="k">MFE / MAE</div><div class="v" id="openPosMfeMae">₹${open.mfe || "—"} / ₹${open.mae || "—"}</div></div>
       <div class="open-pos-cell"><div class="k">Partials</div><div class="v" id="openPosPartials" style="font-size:0.68rem">${partials}</div></div>
@@ -6396,7 +6747,7 @@ function renderOpenPosition() {
     <div class="open-pos-actions" style="margin-top:7px">
       <button class="tlog-take-btn" id="openPosCloseLiveBtn" onclick="tlogCloseLive(${open.id})">Close at live (₹${px ?? "—"})</button>
       <input type="number" step="0.05" placeholder="Exit ₹" onchange="tlogUpdateExit(${open.id}, this.value)">
-      <span style="font-size:0.62rem;color:var(--muted)">Time stop 120 min or 15:15 IST · SL/T1/T2/T3 are planned, not recalculated</span>
+      <span style="font-size:0.62rem;color:var(--muted)">Time stop 120 min or 15:15 IST · planned levels frozen; active SL moves to cost after +15% MFE, then trails</span>
     </div>`;
 }
 
@@ -6442,10 +6793,11 @@ async function tlogClosePosition(id, exitPrice, reason) {
   entry.pnlPct     = +(total * 100).toFixed(2);
   entry.status     = "CLOSED";
   entry.outcome    = entry.pnlPct > 0 ? "WIN" : entry.pnlPct < 0 ? "LOSS" : "BREAKEVEN";
-  entry.notes      = entry.notes || `Closed ${entry.exitReason} at ₹${entry.exitPrice}`;
+  entry.notes      = (entry.notes ? entry.notes + " · " : "") + `Closed ${entry.exitReason} at ₹${entry.exitPrice}`;
 
   renderTlog();
   renderOpenPosition();
+  if (currentSignal) updateSignalEntryControls();
   await tlogSaveAll();
 }
 
@@ -6457,9 +6809,30 @@ async function tlogCloseLive(id) {
   await tlogClosePosition(id, px, "MANUAL-LIVE");
 }
 
+function expireCurrentSignal() {
+  const sig = currentSignal;
+  if (!sig?.type || !sig.expiresAt || Date.now() <= +sig.expiresAt) return false;
+  if (sig.actionable === false) return false;
+  sig.actionable = false;
+  sig.waitReason = "15-minute entry window expired — scrapped";
+  sig.cardClass = "wait";
+
+  const wb = document.getElementById("sigWaitBanner");
+  if (wb) { wb.style.display = "block"; wb.textContent = `⏳ ${sig.waitReason}`; }
+  const dir = document.getElementById("sigDirection");
+  if (dir) { dir.textContent = `⏳ EXPIRED — ${sig.type} bias`; dir.style.color = "#f59e0b"; }
+  const sub = document.getElementById("sigSubtitle");
+  if (sub) sub.textContent = sig.waitReason;
+  const badge = document.getElementById("sigConfBadge");
+  if (badge) { badge.textContent = "● EXPIRED"; badge.className = "sig-confidence conf-medium"; }
+  updateSignalEntryControls();
+  persistSignalState(sig, currentSignalInputs);
+  return true;
+}
+
 function tlogExpireSignals() {
   const now = Date.now();
-  let changed = false;
+  let changed = expireCurrentSignal();
   tlogEntries.forEach(e => {
     normalizeTlogStatus(e);
     if (e.status === "SIGNAL" && e.expiresAt && e.expiresAt < now) {
@@ -6525,6 +6898,28 @@ async function trackOpenPosition() {
     open.mae = open.mae ? Math.min(open.mae, px) : px;
 
     let structureChanged = false;
+    // Breakeven stop: once the trade has shown +15% MFE, never let a winner
+    // turn into a full loser. This changes the active stop only; plannedSl
+    // remains frozen for the record.
+    const mfePct = open.entryPrice > 0 ? ((open.mfe - open.entryPrice) / open.entryPrice * 100) : 0;
+    if (!open.breakevenArmed && mfePct >= 15) {
+      open.breakevenArmed = true;
+      const be = +open.entryPrice.toFixed(2);
+      if (!(open.slPrice > 0) || open.slPrice < be) open.slPrice = be;
+      open.notes = (open.notes ? open.notes + " · " : "") + `MFE +${mfePct.toFixed(1)}% → SL to cost ₹${be}`;
+      structureChanged = true;
+    }
+    // After breakeven is armed, trail at 50% of the peak open gain once the
+    // trade has also cleared +25%. This keeps plannedSl frozen but lets the
+    // active stop lock in part of a runner without moving too early.
+    if (open.breakevenArmed && mfePct >= 25 && open.mfe > open.entryPrice) {
+      const trail = +(open.entryPrice + (open.mfe - open.entryPrice) * 0.5).toFixed(2);
+      if (trail > (open.slPrice || 0) + 0.001) {
+        open.slPrice = trail;
+        open.notes = (open.notes ? open.notes + " · " : "") + `Trail SL ₹${trail}`;
+        structureChanged = true;
+      }
+    }
     // Partial exits: 50% at T1, 30% at T2, 20% runner.
     if (open.t1Price > 0 && !open.t1Hit && px >= open.t1Price) {
       open.t1Hit = true;
@@ -6546,7 +6941,10 @@ async function trackOpenPosition() {
       return;
     }
     if (open.slPrice > 0 && px <= open.slPrice) {
-      await tlogClosePosition(open.id, open.slPrice, open.t1Hit ? "SL-BE" : "SL");
+      const slReason = open.slPrice > (open.entryPrice || 0) + 0.01
+        ? "SL-TRAIL"
+        : (open.t1Hit || open.breakevenArmed) ? "SL-BE" : "SL";
+      await tlogClosePosition(open.id, open.slPrice, slReason);
       return;
     }
     const ageMin = open.entryAt ? (Date.now() - open.entryAt) / 60000 : 0;
@@ -6577,6 +6975,38 @@ async function trackOpenPosition() {
   }
 }
 
+
+// 5-minute reversal guard for an open position. It is deliberately a
+// close/invalidate rule, not an automatic flip into the opposite side: a
+// reversal entry still needs its own strike, target and S/R room.
+async function reversalGuardTick() {
+  if (!canRunSignalEngine()) return;
+  const open = getOpenPosition();
+  if (!open) return;
+  const type = open.strikeType || (String(open.strike).includes("PE") ? "PE" : "CE");
+  const trig = await getTriggerContext(60000).catch(() => null);
+  if (!trig?.available || !(trig.vwap5 > 0)) return;
+
+  const bullReclaim = trig.lastClose > trig.vwap5 &&
+    trig.prevClose != null && trig.lastClose > trig.prevClose && trig.volZ >= 1.0;
+  const bearReclaim = trig.lastClose < trig.vwap5 &&
+    trig.prevClose != null && trig.lastClose < trig.prevClose && trig.volZ >= 1.0;
+  const reversal = (type === "PE" && bullReclaim) || (type === "CE" && bearReclaim);
+  if (!reversal) return;
+
+  if (currentSignal?.type === type && currentSignal.actionable !== false) {
+    currentSignal.actionable = false;
+    currentSignal.waitReason = `REVERSAL — 5m ${type === "PE" ? "close above" : "close below"} VWAP with volume`;
+    currentSignal.cardClass = "wait";
+    updateSignalEntryControls();
+    persistSignalState(currentSignal, currentSignalInputs);
+  }
+
+  const px = open.lastPrice;
+  if (px > 0) {
+    await tlogClosePosition(open.id, px, "REVERSAL-5M");
+  }
+}
 
 async function tlogUpdateExit(id, exitPriceStr) {
   const exitPrice = parseFloat(exitPriceStr);
@@ -6711,20 +7141,54 @@ async function toggleNotifications() {
 function renderSignalPaused() {
   const phase = getTrafficPhase();
   const banner = document.getElementById("sigWaitBanner");
-  if (banner) {
-    banner.style.display = "block";
-    banner.textContent = `⏸ ${phase.label}. No new signal is generated outside the market-data schedule.`;
-  }
   if (!currentSignal) {
+    if (banner) {
+      banner.style.display = "block";
+      banner.textContent = `⏸ ${phase.label}. No new signal is generated outside the market-data schedule.`;
+    }
     const dir = document.getElementById("sigDirection");
     if (dir) { dir.textContent = "⏸ PAUSED"; dir.style.color = "#f59e0b"; }
     const sub = document.getElementById("sigSubtitle");
     if (sub) sub.textContent = phase.label;
+    const badge = document.getElementById("sigConfBadge");
+    if (badge) { badge.textContent = "● PAUSED"; badge.className = "sig-confidence conf-medium"; }
+    const validity = document.getElementById("sigEntryValidity");
+    if (validity) validity.textContent = "PAUSED";
+  } else if (banner && (!banner.textContent || banner.style.display === "none")) {
+    // Keep the restored signal's own expiry/wait message, but explain why the
+    // entry controls are disabled outside the market-data schedule.
+    banner.style.display = "block";
+    banner.textContent = `⏸ ${phase.label}. Existing signal is display-only; no new entries outside the schedule.`;
   }
+  const input = document.getElementById("sigEntryInput");
+  if (input) input.disabled = true;
+  const confirm = document.getElementById("sigConfirmBtn");
+  if (confirm) confirm.disabled = true;
+  const live = document.getElementById("sigUseLiveBtn");
+  if (live) live.disabled = true;
+}
+
+// Between scheduled slots there is no new signal. Keep any restored signal
+// visible; otherwise show the next slot and make clear that refresh does not
+// create a new setup.
+function renderSignalIdle() {
+  if (currentSignal) return;
+  const next = getNextSignalTime();
+  const banner = document.getElementById("sigWaitBanner");
+  if (banner) {
+    banner.style.display = "block";
+    banner.textContent = `⏸ No new signal until ${next}. Signals are generated only at scheduled slots; a page refresh does not create a new setup.`;
+  }
+  const dir = document.getElementById("sigDirection");
+  if (dir) { dir.textContent = "⏸ WAITING"; dir.style.color = "#f59e0b"; }
+  const sub = document.getElementById("sigSubtitle");
+  if (sub) sub.textContent = `Next scheduled signal: ${next}`;
   const badge = document.getElementById("sigConfBadge");
-  if (badge) { badge.textContent = "● PAUSED"; badge.className = "sig-confidence conf-medium"; }
+  if (badge) { badge.textContent = "● WAITING"; badge.className = "sig-confidence conf-medium"; }
   const validity = document.getElementById("sigEntryValidity");
-  if (validity) validity.textContent = "PAUSED";
+  if (validity) validity.textContent = "WAITING";
+  const input = document.getElementById("sigEntryInput");
+  if (input) input.disabled = true;
   const confirm = document.getElementById("sigConfirmBtn");
   if (confirm) confirm.disabled = true;
   const live = document.getElementById("sigUseLiveBtn");
@@ -6834,6 +7298,9 @@ async function runSignalEngine(force = false, logEvent = false) {
 
     const inputs = { spot, prevClose, dayChg, dayChgPct, vix, vixPercentile, pcr, adRatio, breadthPct, gapPct, ivRank, srScorePenalty: srCtx.srScorePenalty, volScore: volData.volScore, volLabel: volData.volLabel, trend, trigger, dayType, sr: srCtx, srLevels, event: eventRisk };
     const sig = computeSignal(inputs);
+    sig.slotKey = logEvent ? (lastSignalTime || currentSignalSlot()) : currentSignalSlot();
+    sig.generatedAt = Date.now();
+    sig.expiresAt = sig.generatedAt + SIGNAL_VALIDITY_MIN * 60000;
     renderSignal(sig, inputs, logEvent);
 
   } catch(e) { console.error("Signal engine error:", e); }
@@ -6852,10 +7319,25 @@ function initSignalEngine() {
   // so they pause outside market hours and when the tab is hidden.
   setInterval(tlogExpireSignals, 60000);
   setTimeout(() => { if (canRunSignalEngine()) fastQuoteTick(); }, 15000);
-  // Render immediately (no logging) and refresh once after the other feeds settle.
-  // renderSignalPaused() is used when the market-data schedule is off.
-  runSignalEngine(true, false);
-  setTimeout(() => runSignalEngine(true, false), 12000);
+
+  // Restore the exact scheduled signal for this slot. Never force a fresh
+  // computation on page load: that is what used to create a new PE setup on
+  // every refresh at an arbitrary minute.
+  const restored = restoreSignalOnLoad();
+  if (!restored) {
+    if (!canRunSignalEngine()) renderSignalPaused();
+    else if (!isSignalTime()) renderSignalIdle();
+  }
+  setTimeout(() => {
+    if (!canRunSignalEngine()) { renderSignalPaused(); return; }
+    if (isSignalTime()) {
+      // First load inside a scheduled slot with no cached signal: this is a
+      // real scheduled signal, so it may log normally.
+      runSignalEngine(false, true);
+    } else if (!currentSignal) {
+      renderSignalIdle();
+    }
+  }, 12000);
 }
 
 /* ─── DATA MODE MANAGER ─── */
@@ -6954,6 +7436,7 @@ function startIntervals() {
   // Fast path: tiny quote refresh + open-position tracking. Full signal
   // computation (S/R, score, targets) still runs once a minute.
   intervals.track   = setInterval(fastQuoteTick, 15000);
+  intervals.reversal = setInterval(reversalGuardTick, 5 * 60 * 1000);
   intervals.chart   = setInterval(() => loadNiftyChart(niftyChartRange), 5 * 60 * 1000);
   intervals.health  = setInterval(() => checkWorkerHealth(), 120000);
 
@@ -7128,6 +7611,12 @@ async function updateEntryPriceFromNSE(sig, inputs) {
     );
     if (!ep || !ep.midPrice) return;
 
+    // Prefer the underlying value returned with the option quote. The cached
+    // signal spot is from the scheduled slot and can be stale by the time the
+    // 15-second quote arrives.
+    const liveSpot = +bundle?.underlyingValue || +inputs.spot || 0;
+    sig.liveSpot = liveSpot || sig.liveSpot || null;
+
     sig.quoteTs = bundle?.chainTimestamp || ep.chainTimestamp || sig.quoteTs || "";
     sig.liveMid = ep.midPrice;
     sig.liveBid = ep.bid;
@@ -7154,21 +7643,21 @@ async function updateEntryPriceFromNSE(sig, inputs) {
     }
 
     // ── Option-quality gate ────────────────────────────────────────────
-    const q = assessOptionQuality(ep, inputs.spot, sig.expiry?.daysToExpiry ?? 5);
+    const q = assessOptionQuality(ep, liveSpot || inputs.spot, sig.expiry?.daysToExpiry ?? 5);
     sig.optionQ = q;
 
     let em = null;
-    try { em = await fetchExpectedMove(inputs.spot, sig.expiry || getTargetExpiry(), bundle); } catch {}
+    try { em = await fetchExpectedMove(liveSpot || inputs.spot, sig.expiry || getTargetExpiry(), bundle); } catch {}
     if (em) sig.expMove = em;
 
     // Rebuild targets from S/R + expected move, now with the live option delta.
     const targetData = computeSignalTargets({
-      spot: inputs.spot,
+      spot: liveSpot || inputs.spot,
       type: sig.type,
       entryPremium: ep.midPrice,
       delta: q.delta || 0.5,
       levels: inputs.srLevels || [inputs.sr?.above, inputs.sr?.below].filter(Boolean),
-      dailyEM: em?.daily || estimateDailyEM(inputs.spot, inputs.vix),
+      dailyEM: em?.daily || estimateDailyEM(liveSpot || inputs.spot, inputs.vix),
       dte: sig.expiry?.daysToExpiry ?? 5,
     });
     sig.t1Price = targetData.targets[0].price;
@@ -7218,7 +7707,9 @@ async function updateEntryPriceFromNSE(sig, inputs) {
     }
     if (gate) {
       sig.actionable = false;
-      sig.waitReason = sig.waitReason ? `${sig.waitReason}; ${gate}` : gate;
+      if (!sig.waitReason?.includes(gate)) {
+        sig.waitReason = sig.waitReason ? `${sig.waitReason}; ${gate}` : gate;
+      }
       const card = document.getElementById("sigCard");
       if (card) card.className = "signal-card wait";
       const dir = document.getElementById("sigDirection");
@@ -7247,6 +7738,7 @@ async function updateEntryPriceFromNSE(sig, inputs) {
       sig.prob = p;
     }
 
+    if (currentSignal === sig) persistSignalState(sig, inputs);
     renderActualEntryNote(sig);
     updateSignalEntryControls();
     syncCurrentSignalLogTargets(sig).catch(() => {});
@@ -7292,7 +7784,10 @@ async function fastQuoteTick() {
     const sig = currentSignal;
     const jobs = [];
     if (open) jobs.push(trackOpenPosition());
-    if (sig?.type && sig?.primaryStrike) jobs.push(refreshSignalLiveQuote(sig));
+    const sigExpired = !!sig?.expiresAt && Date.now() > +sig.expiresAt;
+    if (!open && sig?.type && sig?.primaryStrike && !sig.entryLocked && !sigExpired) {
+      jobs.push(refreshSignalLiveQuote(sig));
+    }
     if (jobs.length) await Promise.allSettled(jobs);
   } finally {
     _fastQuoteBusy = false;
@@ -7322,7 +7817,7 @@ function renderActualEntryNote(sig) {
   const awayPct   = planned > 0 ? Math.abs(actual - planned) / planned * 100 : 0;
 
   let html = `Actual R:R <strong>1:${actualRR.toFixed(2)}</strong> (planned 1:${plannedRR.toFixed(2)}) · Max loss ₹${Math.round(maxLoss)}/lot · SL ₹${sl} / T1 ₹${t1} unchanged`;
-  if (awayPct > 3) {
+  if (awayPct > 2.5) {
     html += `<br><span style="color:#f59e0b">⚠ Late/chase entry: fill is ${awayPct.toFixed(1)}% away from planned ₹${planned}. Consider skipping.</span>`;
   }
   if (open) {
@@ -7335,20 +7830,46 @@ function updateSignalEntryControls() {
   const sig = currentSignal;
   if (!sig?.type) return;
   const open = getOpenPosition();
-  const actionable = sig.actionable !== false;
+  const expired = !!sig.expiresAt && Date.now() > +sig.expiresAt;
+  if (expired && sig.actionable !== false) {
+    sig.actionable = false;
+    sig.waitReason = "15-minute entry window expired — scrapped";
+    sig.cardClass = "wait";
+  }
+  const actionable = sig.actionable !== false && !expired && !sig.entryLocked;
   const input = document.getElementById("sigEntryInput");
   const confirm = document.getElementById("sigConfirmBtn");
   const live = document.getElementById("sigUseLiveBtn");
   const validity = document.getElementById("sigEntryValidity");
   if (input) input.disabled = !actionable || !!open;
   if (confirm) confirm.disabled = !actionable || !!open;
-  if (live) live.disabled = !actionable;
+  if (live) live.disabled = !actionable || !!open;
   if (validity) {
+    const until = sig.expiresAt
+      ? new Date(+sig.expiresAt).toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: true })
+      : "";
     validity.textContent = open
       ? "Position already open"
-      : actionable
-        ? `Valid ${SIGNAL_VALIDITY_MIN} min`
-        : "WAIT — not executable";
+      : sig.entryLocked
+        ? "Signal already taken"
+        : expired
+          ? "EXPIRED — not executable"
+          : actionable
+            ? `Valid ${SIGNAL_VALIDITY_MIN} min${until ? ` · until ${until}` : ""}`
+            : "WAIT — not executable";
+  }
+  // Keep the card's status in sync after the trading log loads or a fill is
+  // confirmed. A new actionable signal is watch-only while a position is open.
+  if (!expired && sig.actionable !== false) {
+    const dir = document.getElementById("sigDirection");
+    const badge = document.getElementById("sigConfBadge");
+    if (open) {
+      if (dir) { dir.textContent = `⏳ WATCH ONLY — ${sig.type} bias`; dir.style.color = "#f59e0b"; }
+      if (badge) { badge.textContent = "● WATCH ONLY"; badge.className = "sig-confidence conf-medium"; }
+    } else if (sig.entryLocked) {
+      if (dir) { dir.textContent = `⏳ TAKEN — ${sig.type}`; dir.style.color = "#f59e0b"; }
+      if (badge) { badge.textContent = "● TAKEN"; badge.className = "sig-confidence conf-medium"; }
+    }
   }
   renderActualEntryNote(sig);
 }
@@ -7357,6 +7878,7 @@ function useLiveSignalEntry() {
   const sig = currentSignal;
   const px = sig?.liveMid || sig?.entryMid;
   if (!(px > 0)) return;
+  if (sig.actionable === false || sig.entryLocked || (sig.expiresAt && Date.now() > +sig.expiresAt)) return;
   const input = document.getElementById("sigEntryInput");
   if (input) {
     input.value = px;
@@ -7367,12 +7889,27 @@ function useLiveSignalEntry() {
 async function confirmSignalEntry() {
   const sig = currentSignal, inputs = currentSignalInputs;
   if (!sig?.type) return;
+  // Wait for the persisted trading log before deciding whether this is a
+  // duplicate entry or whether a position is already open.
+  if (tlogReadyPromise) { try { await tlogReadyPromise; } catch {} }
+  if (sig.expiresAt && Date.now() > +sig.expiresAt) {
+    sig.actionable = false;
+    sig.waitReason = "15-minute entry window expired — scrapped";
+    updateSignalEntryControls();
+    persistSignalState(sig, inputs);
+    alert("This signal has expired. Wait for the next scheduled signal.");
+    return;
+  }
   if (sig.actionable === false) {
     alert("Wait-only signal: " + (sig.waitReason || "trigger not confirmed"));
     return;
   }
   if (getOpenPosition()) {
     alert("A position is already open. Close it before taking another.");
+    return;
+  }
+  if (sig.entryLocked) {
+    alert("This signal has already been taken. Wait for the next scheduled signal.");
     return;
   }
   const price = parseFloat(document.getElementById("sigEntryInput")?.value);
@@ -7386,6 +7923,10 @@ async function confirmSignalEntry() {
     entry = await currentSignalAddPromise;
     if (entry) currentSignalTlogId = entry.id;
   }
+  // After a refresh, reattach to the log entry created for this same slot
+  // instead of creating a duplicate SIGNAL/WATCH row.
+  if (!entry) entry = findSignalLogEntry(sig);
+  if (entry) currentSignalTlogId = entry.id;
   if (!entry) {
     entry = await tlogAddEntry(sig, inputs, sig.prob);
     if (entry) currentSignalTlogId = entry.id;
@@ -7398,6 +7939,7 @@ async function confirmSignalEntry() {
   const ok = await tlogConfirmEntry(entry.id, price);
   if (ok) {
     sig.entryLocked = true;
+    persistSignalState(sig, inputs);
     renderActualEntryNote(sig);
     updateSignalEntryControls();
   }
@@ -7435,7 +7977,20 @@ restoreLastNiftySnapshot();
 // Chart shell and the last local close are free — no network.
 initPCRChart();
 initSignalEngine();
-tlogLoad();
+tlogReadyPromise = tlogLoad();
+
+// Keep a second open tab in sync when another tab generates the scheduled
+// signal. Without this, the second tab could skip generation (because the slot
+// is already marked in localStorage) but keep showing the previous card.
+window.addEventListener("storage", (e) => {
+  if (e.key !== SIGNAL_STATE_LS_KEY || !e.newValue) return;
+  const state = loadSignalState();
+  if (!state?.slotKey) return;
+  if (currentSignal?.slotKey === state.slotKey) return;
+  if (currentSignal?.generatedAt && state.sig?.generatedAt &&
+      +state.sig.generatedAt <= +currentSignal.generatedAt) return;
+  restoreSignalOnLoad();
+});
 
 // This either starts the scheduled intervals (market hours, visible tab) or
 // leaves them off and shows the paused state. Outside market hours the first

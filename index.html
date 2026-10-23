@@ -1809,6 +1809,11 @@ const NSE_WORKER_URL = "https://nse-proxy.ivijaysinghchoudhary.workers.dev";
 // back to the old direct/Jina path, feed by feed.
 const NEWS_BUNDLE_URL = NSE_WORKER_URL ? NSE_WORKER_URL.replace(/\/+$/, "") + "/news" : "";
 
+// Tiny option-quote projection. The Worker keeps the full NSE chain at the
+// edge and returns only the requested leg + ATM CE/PE, so live premiums can
+// refresh every few seconds without downloading the whole chain.
+const OPTION_QUOTE_URL = NSE_WORKER_URL ? NSE_WORKER_URL.replace(/\/+$/, "") + "/option-quote" : "";
+
 // ── NSE F&O RULES (verified 20-Oct-2026) ─────────────────────────────
 // Weekly NIFTY expiry: Tuesday. Monthly: last Tuesday.
 // If the expiry Tuesday is an NSE holiday, expiry moves to the PREVIOUS trading day.
@@ -2149,6 +2154,14 @@ function formatNseQuoteTime(raw, includeDate = false) {
   const time = d.toLocaleTimeString("en-IN", { timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", hour12: false });
   const date = d.toLocaleDateString("en-IN", { timeZone: "Asia/Kolkata", day: "2-digit", month: "short" });
   return includeDate ? `${date}, ${time} IST` : `${time} IST`;
+}
+function formatNseQuoteClock(raw) {
+  const d = parseNseTimestamp(raw);
+  if (!d) return "";
+  const time = d.toLocaleTimeString("en-IN", {
+    timeZone: "Asia/Kolkata", hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false
+  });
+  return `${time} IST`;
 }
 function nseQuoteIsToday(raw) {
   const d = parseNseTimestamp(raw);
@@ -3110,16 +3123,21 @@ function updatePCRChart(pcr, label) {
 }
 
 /* ─── PCR (PUT/CALL RATIO) — NSE option chain ─── */
-let _ocCache = { key: "", ts: 0, data: null, promise: null };
+let _ocCache = { key: "", ts: 0, data: null, promise: null, meta: null };
 async function getOptionChain(apiDate, maxAgeMs = 45000) {
   if (_ocCache.key === apiDate && _ocCache.data && Date.now() - _ocCache.ts < maxAgeMs) return _ocCache.data;
   if (_ocCache.key === apiDate && _ocCache.promise) return _ocCache.promise;
+  if (_ocCache.key !== apiDate) _ocCache.meta = null;
   _ocCache.key = apiDate;
   _ocCache.promise = nseAPI(`/api/option-chain-v3?type=Indices&symbol=NIFTY&expiry=${encodeURIComponent(apiDate)}`)
     .then(j => {
       const rows = j?.records?.data || [];
       if (!rows.length) throw new Error("empty option chain");
       _ocCache.data = rows; _ocCache.ts = Date.now();
+      _ocCache.meta = {
+        timestamp: j?.records?.timestamp || "",
+        underlyingValue: Number(j?.records?.underlyingValue || 0),
+      };
       return rows;
     })
     .finally(() => { _ocCache.promise = null; });
@@ -4643,22 +4661,183 @@ function assessOptionQuality(ep, spot, dte) {
   };
 }
 
+/* ─── FAST OPTION QUOTES ───────────────────────────────────────────────
+   The full NSE option chain is ~300 KB. Downloading and re-parsing it every
+   minute is why the premium looked delayed: the browser cache held it for
+   45 s and the Worker cache held it for 60 s.
+
+   /option-quote keeps the full chain at the edge for 10 s and returns only
+   the requested strike/leg plus the ATM CE/PE pair. The browser can then
+   refresh the live premium every 15 s with a ~1–2 KB response. If the new
+   endpoint has not been deployed yet, this falls back to the old full chain. */
+const _oqCache = new Map();
+let _optionQuoteEndpointDownUntil = 0;
+
+function optionQuoteKey(expiry, strike, type, spot) {
+  return [expiry?.apiDate || "", +strike || 0, type || "", getATM(+spot || 0)].join("|");
+}
+
+function optionLegFromChain(row, type, chainTimestamp) {
+  const leg = row?.[type];
+  if (!leg) return null;
+  const bid  = Number(leg.buyPrice1 || 0);
+  const ask  = Number(leg.sellPrice1 || 0);
+  const last = Number(leg.lastPrice || 0);
+  let mid = bid > 0 && ask > 0 ? (bid + ask) / 2 : last;
+  if (!(mid > 0)) return null;
+  mid = Math.round(mid * 20) / 20; // NSE tick = 0.05
+  return {
+    strike: Number(row.strikePrice) || 0,
+    type,
+    lastPrice: last,
+    bid, ask, mid,
+    iv: Number(leg.impliedVolatility || 0),
+    oi: Number(leg.openInterest || 0),
+    volume: Number(leg.totalTradedVolume || leg.volume || 0),
+    change: Number(leg.change || leg.changeinOpenInterest || 0),
+    chainTimestamp: chainTimestamp || "",
+  };
+}
+
+function normalizeOptionLeg(leg, strike, type, expiry, chainTimestamp) {
+  if (!leg) return null;
+  const bid  = Number(leg.bid ?? leg.buyPrice1 ?? 0);
+  const ask  = Number(leg.ask ?? leg.sellPrice1 ?? 0);
+  const last = Number(leg.lastPrice ?? 0);
+  let mid = Number(leg.mid ?? 0);
+  if (!(mid > 0)) mid = bid > 0 && ask > 0 ? (bid + ask) / 2 : last;
+  if (!(mid > 0)) return null;
+  mid = Math.round(mid * 20) / 20;
+  return {
+    midPrice: mid,
+    bid, ask,
+    strike: Number(leg.strike || strike || 0),
+    type: leg.type || type || "",
+    iv: Number(leg.iv ?? leg.impliedVolatility ?? 0),
+    oi: Number(leg.oi ?? leg.openInterest ?? 0),
+    volume: Number(leg.volume ?? leg.totalTradedVolume ?? 0),
+    change: Number(leg.change ?? 0),
+    slPrice: Math.max(0.05, Math.round(mid * 0.70 * 20) / 20),
+    expiry: expiry?.apiDate || "",
+    chainTimestamp: leg.chainTimestamp || chainTimestamp || "",
+    source: "NSE option chain",
+  };
+}
+
+async function fetchOptionQuoteFallback(strike, type, spot, expiry, maxAgeMs = 20000) {
+  const rows = await getOptionChain(expiry.apiDate, maxAgeMs);
+  const chainTimestamp = _ocCache.meta?.timestamp || "";
+  const row = rows.find(r => Math.abs(parseFloat(r.strikePrice) - strike) < 0.01) || null;
+  const spotForAtm = +spot || +(_ocCache.meta?.underlyingValue) || 0;
+  const atm = getATM(spotForAtm);
+  const atmRow = rows.find(r => Math.abs(parseFloat(r.strikePrice) - atm) < 0.01) || null;
+  return {
+    ok: true,
+    expiry: expiry.apiDate,
+    chainTimestamp,
+    spot: spotForAtm,
+    atm,
+    requested: row ? optionLegFromChain(row, type, chainTimestamp) : null,
+    atmCE: atmRow ? optionLegFromChain(atmRow, "CE", chainTimestamp) : null,
+    atmPE: atmRow ? optionLegFromChain(atmRow, "PE", chainTimestamp) : null,
+    source: "NSE option chain (fallback)",
+  };
+}
+
+async function fetchOptionQuoteBundle(strike, type, spot = 0, maxAgeMs = 6000) {
+  const expiry = getTargetExpiry();
+  const key = optionQuoteKey(expiry, strike, type, spot);
+  const hit = _oqCache.get(key);
+  if (hit?.data && Date.now() - hit.ts < maxAgeMs) return hit.data;
+  if (hit?.promise) return hit.promise;
+
+  const entry = { ts: 0, data: null, promise: null };
+  _oqCache.set(key, entry);
+
+  const load = async () => {
+    if (OPTION_QUOTE_URL && Date.now() > _optionQuoteEndpointDownUntil) {
+      try {
+        const u = new URL(OPTION_QUOTE_URL);
+        u.searchParams.set("symbol", "NIFTY");
+        u.searchParams.set("expiry", expiry.apiDate);
+        if (strike > 0) u.searchParams.set("strike", String(strike));
+        if (type) u.searchParams.set("type", type);
+        if (spot > 0) u.searchParams.set("spot", String(spot));
+
+        const r = await fetch(u.toString(), {
+          signal: AbortSignal.timeout(Math.min(8000, Math.max(3500, maxAgeMs + 3000))),
+          headers: { "Accept": "application/json" },
+          cache: "no-store",
+        });
+        if (r.status === 404 || r.status === 405 || r.status === 501) {
+          // Old Worker deployment: do not retry the missing route every tick.
+          _optionQuoteEndpointDownUntil = Date.now() + 2 * 60 * 1000;
+          throw new Error("option-quote endpoint not deployed");
+        }
+        if (!r.ok) throw new Error("option-quote HTTP " + r.status);
+        const data = await r.json();
+        if (!data?.ok) throw new Error(data?.error || "option-quote failed");
+        if (strike > 0 && !data.requested) {
+          // The endpoint is healthy; this strike simply is not in the chain.
+          // Fall back for this request without disabling the fast path.
+          return fetchOptionQuoteFallback(strike, type, spot, expiry, 20000);
+        }
+        return data;
+      } catch (e) {
+        // A transient failure should not permanently disable the fast path.
+        if (!_optionQuoteEndpointDownUntil) {
+          _optionQuoteEndpointDownUntil = Date.now() + 60 * 1000;
+        }
+      }
+    }
+    // If the tiny endpoint is unavailable, fall back to the old full-chain
+    // cadence (45 s) instead of downloading ~300 KB every 15 s.
+    const fallbackAge = (!OPTION_QUOTE_URL || Date.now() < _optionQuoteEndpointDownUntil)
+      ? 45000
+      : Math.max(15000, maxAgeMs);
+    return fetchOptionQuoteFallback(strike, type, spot, expiry, fallbackAge);
+  };
+
+  entry.promise = load()
+    .then(data => {
+      if (data) { entry.data = data; entry.ts = Date.now(); }
+      return data;
+    })
+    .finally(() => { entry.promise = null; });
+
+  // Keep the per-strike cache bounded during a long session.
+  if (_oqCache.size > 12) {
+    for (const [k, v] of _oqCache) {
+      if (k !== key && !v.promise && Date.now() - v.ts > 60000) _oqCache.delete(k);
+    }
+  }
+  return entry.promise;
+}
+
+function getLiveSpotForQuotes() {
+  const fromInputs = Number(currentSignalInputs?.spot) || 0;
+  if (fromInputs > 0) return fromInputs;
+  const txt = document.getElementById("price")?.textContent || "";
+  return parseFloat(txt.replace(/[₹,\s]/g, "")) || 0;
+}
+
 // ATM straddle ≈ expected absolute move to expiry. Divide by √DTE for a
 // rough one-day expected move, then compare with the move T1 requires.
-async function fetchExpectedMove(spot, expiry) {
+async function fetchExpectedMove(spot, expiry, bundle = null) {
   try {
-    const atm = getATM(spot);
-    const dte = Math.max(1, expiry?.daysToExpiry ?? 1);
-    const [ce, pe] = await Promise.all([
-      fetchRealOptionPrice(atm, "CE"),
-      fetchRealOptionPrice(atm, "PE"),
-    ]);
+    const exp = expiry || getTargetExpiry();
+    const atm = +bundle?.atm || getATM(spot);
+    if (!bundle) bundle = await fetchOptionQuoteBundle(atm, "CE", spot, 5000);
+    const ce = normalizeOptionLeg(bundle?.atmCE, atm, "CE", exp, bundle?.chainTimestamp);
+    const pe = normalizeOptionLeg(bundle?.atmPE, atm, "PE", exp, bundle?.chainTimestamp);
     if (!ce?.midPrice || !pe?.midPrice) return null;
+    const dte = Math.max(1, exp?.daysToExpiry ?? 1);
     const straddle = ce.midPrice + pe.midPrice;
     return {
       atm, dte, straddle: +straddle.toFixed(1),
       daily: +(straddle / Math.sqrt(dte)).toFixed(1),
       weekly: +straddle.toFixed(1),
+      chainTimestamp: bundle?.chainTimestamp || "",
     };
   } catch { return null; }
 }
@@ -5332,7 +5511,7 @@ function renderSignal(sig, inputs, logEvent = true) {
     document.getElementById("sigExitPrice").textContent   = `₹${ep.slPrice}`;
     document.getElementById("sigExitNote").textContent    = `Exit if falls to ₹${ep.slPrice} (–30%)`;
     document.getElementById("sigEntryNote").innerHTML     =
-      `⟳ Fetching live NSE price... (Black-Scholes est: ₹${ep.entryMid})`;
+      `⟳ Fetching NSE option quote... (Black-Scholes est: ₹${ep.entryMid})`;
     document.getElementById("sigSL").textContent = `🛑 SL: Exit at ₹${ep.slPrice} · Entry ~₹${ep.entryMid} · Max loss ~₹${Math.round((ep.entryMid - ep.slPrice) * NIFTY_LOT_SIZE)} per lot`;
     renderSignalTargets(sig, targetData);
 
@@ -5865,7 +6044,7 @@ function renderTlog() {
         ? `<button class="tlog-take-btn" onclick="tlogCloseLive(${e.id})" title="Close at the latest live price">Close</button>`
         : `<button class="tlog-edit-btn" onclick="tlogDelete(${e.id})" title="Delete">✕</button>`;
 
-    return `<tr>
+    return `<tr data-tlog-id="${e.id}">
       <td style="color:var(--muted2);white-space:nowrap">${e.date}</td>
       <td style="color:var(--muted2)">${e.time}</td>
       <td style="color:${dirColor};font-weight:700">${e.direction || "—"}</td>
@@ -5875,7 +6054,7 @@ function renderTlog() {
       <td><span class="vol-badge ${e.volClass || "vol-na"}">${e.volLabel?.split("—")[0]?.trim() || "—"}</span></td>
       <td style="font-size:0.68rem;color:var(--muted2)">${e.regime?.replace(/[🟢🟡🟠🔴⚪]/u,"").trim().slice(0,18) || "—"}</td>
       <td>${exitCell}</td>
-      <td style="color:${pnlColor};font-weight:600">${pnl}</td>
+      <td class="tlog-pnl" style="color:${pnlColor};font-weight:600">${pnl}</td>
       <td title="${escHtml(e.waitReason || "")}">${tlogStatusBadge(e.status)}</td>
       <td><span class="tlog-outcome ${outcomeClass}">${outcome}</span></td>
       <td><input type="text" value="${escHtml(e.notes || "")}" placeholder="Add note..." onchange="tlogUpdateNotes(${e.id}, this.value)"
@@ -5888,6 +6067,21 @@ function renderTlog() {
   renderOpenPosition();
 }
 
+// Update only the live P&L cell for an open row. The full table is left alone
+// so the user can type an exit price or note while quotes refresh.
+function updateTlogLiveRow(e) {
+  if (!e) return;
+  const tr = document.querySelector(`tr[data-tlog-id="${e.id}"]`);
+  if (!tr) return;
+  const pnlPct = tlogPnlPct(e);
+  const pnl = pnlPct == null ? "—" : (pnlPct > 0 ? "+" : "") + pnlPct.toFixed(1) + "%";
+  const pnlColor = pnlPct == null ? "var(--muted)" : pnlPct > 0 ? "#22c55e" : pnlPct < 0 ? "#ef4444" : "var(--muted2)";
+  const cell = tr.querySelector(".tlog-pnl");
+  if (cell) {
+    cell.textContent = pnl;
+    cell.style.color = pnlColor;
+  }
+}
 
 function updateTlogStats() {
   tlogEntries.forEach(normalizeTlogStatus);
@@ -5978,9 +6172,14 @@ async function tlogAddEntry(sig, inputs, prob) {
   // This is the PLANNED entry. It is not a fill until the user confirms.
   let entryPrice = sig.entryMid || null;
   let entrySource = sig.entryLive ? "NSE planned" : "BS planned";
+  let quoteTs = sig.liveQuoteTs || sig.quoteTs || null;
   try {
-    const live = await fetchRealOptionPrice(sig.primaryStrike, sig.type);
-    if (live?.midPrice) { entryPrice = live.midPrice; entrySource = "NSE planned"; }
+    const live = await fetchRealOptionPrice(sig.primaryStrike, sig.type, { spot: inputs.spot, maxAgeMs: 5000 });
+    if (live?.midPrice) {
+      entryPrice = live.midPrice;
+      entrySource = "NSE planned";
+      quoteTs = live.chainTimestamp || quoteTs;
+    }
   } catch {}
 
   // Signal lifecycle: at most one actionable signal and one open trade.
@@ -6016,6 +6215,7 @@ async function tlogAddEntry(sig, inputs, prob) {
     strikeType:  sig.type ?? null,
     entryPrice,
     entrySource,
+    quoteTs,
     plannedEntry: entryPrice,
     slPrice:      sig.slPrice ?? null,
     t1Price:      sig.t1Price ?? null,
@@ -6070,6 +6270,7 @@ async function syncCurrentSignalLogTargets(sig) {
 
   entry.entryPrice   = entry.plannedEntry = sig.entryMid;
   entry.entrySource  = sig.entryLive ? "NSE planned" : entry.entrySource;
+  entry.quoteTs      = sig.liveQuoteTs || sig.quoteTs || entry.quoteTs;
   entry.slPrice      = entry.plannedSl = sig.slPrice;
   entry.t1Price      = entry.plannedT1 = sig.t1Price;
   entry.t2Price      = entry.plannedT2 = sig.t2Price;
@@ -6113,6 +6314,7 @@ async function tlogConfirmEntry(id, price) {
 
   entry.entryPrice = +px.toFixed(2);
   entry.entrySource = "manual fill";
+  entry.quoteTs = currentSignal?.liveQuoteTs || currentSignal?.quoteTs || entry.quoteTs || "";
   entry.entryTaken  = true;
   entry.status      = "OPEN";
   entry.outcome     = "PENDING";
@@ -6145,6 +6347,22 @@ async function tlogTakeFromRow(id) {
   }
 }
 
+function openQuoteMeta(open) {
+  const quoteClock = open.quoteTs ? formatNseQuoteClock(open.quoteTs) : "";
+  const quoteMs = open.quoteTs ? parseNseTimestamp(open.quoteTs)?.getTime() : null;
+  const quoteAge = quoteMs ? Math.max(0, Math.round((Date.now() - quoteMs) / 1000)) : null;
+  const quoteLive = canRunSignalEngine();
+  const quoteColor = !quoteLive ? "var(--muted2)"
+    : quoteAge == null ? "var(--muted)"
+    : quoteAge > 120 ? "#ef4444"
+    : quoteAge > 45 ? "#f59e0b"
+    : "#22c55e";
+  const quoteLabel = quoteClock
+    ? `NSE ${quoteClock}${quoteLive && quoteAge > 45 ? ` · ${quoteAge}s` : ""}`
+    : "";
+  return { quoteClock, quoteAge, quoteLive, quoteColor, quoteLabel };
+}
+
 function renderOpenPosition() {
   const el = document.getElementById("openPosPanel");
   if (!el) return;
@@ -6156,6 +6374,7 @@ function renderOpenPosition() {
   const color = pnlPct == null ? "var(--muted)" : pnlPct >= 0 ? "#22c55e" : "#ef4444";
   const ageMin = open.entryAt ? Math.round((Date.now() - open.entryAt) / 60000) : null;
   const partials = (open.partials || []).map(p => `T${p.weight === 0.5 ? 1 : 2} @ ₹${p.price}`).join(" · ") || "none";
+  const qmeta = openQuoteMeta(open);
 
   el.className = "open-pos" + (pnlPct < 0 ? " loss" : "");
   el.style.display = "block";
@@ -6166,19 +6385,43 @@ function renderOpenPosition() {
     </div>
     <div class="open-pos-grid">
       <div class="open-pos-cell"><div class="k">Entry</div><div class="v">₹${open.entryPrice}</div></div>
-      <div class="open-pos-cell"><div class="k">Live</div><div class="v">₹${px ?? "—"}</div></div>
-      <div class="open-pos-cell"><div class="k">P&L</div><div class="v" style="color:${color}">${pnlPct == null ? "—" : (pnlPct > 0 ? "+" : "") + pnlPct.toFixed(1) + "%"}</div></div>
+      <div class="open-pos-cell"><div class="k">Live</div><div class="v" id="openPosLive">₹${px ?? "—"}${qmeta.quoteLabel ? `<div style="font-size:0.55rem;color:${qmeta.quoteColor}" title="NSE option-chain timestamp">${qmeta.quoteLabel}</div>` : ""}</div></div>
+      <div class="open-pos-cell"><div class="k">P&L</div><div class="v" id="openPosPnl" style="color:${color}">${pnlPct == null ? "—" : (pnlPct > 0 ? "+" : "") + pnlPct.toFixed(1) + "%"}</div></div>
       <div class="open-pos-cell"><div class="k">SL (frozen)</div><div class="v" style="color:#ef4444">₹${open.slPrice ?? "—"}</div></div>
       <div class="open-pos-cell"><div class="k">T1 / T2 / T3</div><div class="v">₹${open.t1Price ?? "—"} / ₹${open.t2Price ?? "—"} / ₹${open.t3Price ?? "—"}</div></div>
-      <div class="open-pos-cell"><div class="k">MFE / MAE</div><div class="v">₹${open.mfe || "—"} / ₹${open.mae || "—"}</div></div>
-      <div class="open-pos-cell"><div class="k">Partials</div><div class="v" style="font-size:0.68rem">${partials}</div></div>
+      <div class="open-pos-cell"><div class="k">MFE / MAE</div><div class="v" id="openPosMfeMae">₹${open.mfe || "—"} / ₹${open.mae || "—"}</div></div>
+      <div class="open-pos-cell"><div class="k">Partials</div><div class="v" id="openPosPartials" style="font-size:0.68rem">${partials}</div></div>
       <div class="open-pos-cell"><div class="k">Planned entry</div><div class="v">₹${open.plannedEntry ?? "—"}</div></div>
     </div>
     <div class="open-pos-actions" style="margin-top:7px">
-      <button class="tlog-take-btn" onclick="tlogCloseLive(${open.id})">Close at live (₹${px ?? "—"})</button>
+      <button class="tlog-take-btn" id="openPosCloseLiveBtn" onclick="tlogCloseLive(${open.id})">Close at live (₹${px ?? "—"})</button>
       <input type="number" step="0.05" placeholder="Exit ₹" onchange="tlogUpdateExit(${open.id}, this.value)">
       <span style="font-size:0.62rem;color:var(--muted)">Time stop 120 min or 15:15 IST · SL/T1/T2/T3 are planned, not recalculated</span>
     </div>`;
+}
+
+// Targeted update for the 15-second quote tick. Re-rendering the whole panel
+// would wipe focus from the manual exit input; this touches only live cells.
+function updateOpenPositionLive(open) {
+  if (!open) return;
+  const px = open.lastPrice || open.entryPrice;
+  const pnlPct = px && open.entryPrice ? (px - open.entryPrice) / open.entryPrice * 100 : null;
+  const color = pnlPct == null ? "var(--muted)" : pnlPct >= 0 ? "#22c55e" : "#ef4444";
+  const qmeta = openQuoteMeta(open);
+
+  const liveEl = document.getElementById("openPosLive");
+  if (liveEl) {
+    liveEl.innerHTML = `₹${px ?? "—"}${qmeta.quoteLabel ? `<div style="font-size:0.55rem;color:${qmeta.quoteColor}" title="NSE option-chain timestamp">${qmeta.quoteLabel}</div>` : ""}`;
+  }
+  const pnlEl = document.getElementById("openPosPnl");
+  if (pnlEl) {
+    pnlEl.textContent = pnlPct == null ? "—" : (pnlPct > 0 ? "+" : "") + pnlPct.toFixed(1) + "%";
+    pnlEl.style.color = color;
+  }
+  const mfeEl = document.getElementById("openPosMfeMae");
+  if (mfeEl) mfeEl.textContent = `₹${open.mfe || "—"} / ₹${open.mae || "—"}`;
+  const closeBtn = document.getElementById("openPosCloseLiveBtn");
+  if (closeBtn) closeBtn.textContent = `Close at live (₹${px ?? "—"})`;
 }
 
 async function tlogClosePosition(id, exitPrice, reason) {
@@ -6261,23 +6504,27 @@ async function trackOpenPosition() {
   if (_trackingPosition) return;
   const open = getOpenPosition();
   if (!open) return;
-  const sess = getMarketSession();
-  if (!sess.isTradingDay) return;
+  if (!canRunSignalEngine()) return;
 
   _trackingPosition = true;
   try {
     const type = open.strikeType || (String(open.strike).includes("PE") ? "PE" : "CE");
     const strike = open.strikeValue || parseInt(open.strike, 10);
     if (!(strike > 0) || !type) return;
-    const ep = await fetchRealOptionPrice(strike, type);
+    const ep = await fetchRealOptionPrice(strike, type, {
+      spot: getLiveSpotForQuotes() || open.spot || 0,
+      maxAgeMs: 6000,
+    });
     if (!ep?.midPrice) return;
 
     const px = ep.midPrice;
     open.lastPrice = px;
     open.lastUpdate = Date.now();
+    open.quoteTs = ep.chainTimestamp || open.quoteTs || "";
     open.mfe = Math.max(open.mfe || 0, px);
     open.mae = open.mae ? Math.min(open.mae, px) : px;
 
+    let structureChanged = false;
     // Partial exits: 50% at T1, 30% at T2, 20% runner.
     if (open.t1Price > 0 && !open.t1Hit && px >= open.t1Price) {
       open.t1Hit = true;
@@ -6285,12 +6532,14 @@ async function trackOpenPosition() {
       open.partials.push({ price: open.t1Price, weight: 0.5, at: Date.now() });
       open.slPrice = open.entryPrice; // move stop to cost after T1
       open.notes = (open.notes ? open.notes + " · " : "") + `T1 hit ₹${open.t1Price} (50%), SL → cost`;
+      structureChanged = true;
     }
     if (open.t2Price > 0 && !open.t2Hit && px >= open.t2Price) {
       open.t2Hit = true;
       open.partials = open.partials || [];
       open.partials.push({ price: open.t2Price, weight: 0.3, at: Date.now() });
       open.notes = (open.notes ? open.notes + " · " : "") + `T2 hit ₹${open.t2Price} (30%)`;
+      structureChanged = true;
     }
     if (open.t3Price > 0 && px >= open.t3Price) {
       await tlogClosePosition(open.id, open.t3Price, "T3");
@@ -6311,9 +6560,16 @@ async function trackOpenPosition() {
     }
 
     // Routine poll: local persistence only; GitHub sync on events/close.
+    // Do not re-render the whole panel/table every few seconds — that would
+    // wipe focus from the exit/notes inputs. Update live cells in place.
     tlogLocalWrite(tlogEntries);
-    renderOpenPosition();
-    renderTlog();
+    if (structureChanged) {
+      renderTlog(); // partial/SL changes need the full structure
+    } else {
+      updateOpenPositionLive(open);
+      updateTlogLiveRow(open);
+      updateTlogStats();
+    }
   } catch (e) {
     console.log("Position tracking failed:", e.message);
   } finally {
@@ -6595,7 +6851,7 @@ function initSignalEngine() {
   // Signal refresh and open-position tracking are scheduled by startIntervals()
   // so they pause outside market hours and when the tab is hidden.
   setInterval(tlogExpireSignals, 60000);
-  setTimeout(() => { if (canRunSignalEngine()) trackOpenPosition(); }, 15000);
+  setTimeout(() => { if (canRunSignalEngine()) fastQuoteTick(); }, 15000);
   // Render immediately (no logging) and refresh once after the other feeds settle.
   // renderSignalPaused() is used when the market-data schedule is off.
   runSignalEngine(true, false);
@@ -6695,7 +6951,9 @@ function startIntervals() {
   intervals.ann     = setInterval(trackedLoadAnnouncements, annMs);
   intervals.news    = setInterval(loadAllNews,             newsMs);
   intervals.signal  = setInterval(() => runSignalEngine(false, true), 60000);
-  intervals.track   = setInterval(() => { if (canRunSignalEngine()) trackOpenPosition(); }, 120000);
+  // Fast path: tiny quote refresh + open-position tracking. Full signal
+  // computation (S/R, score, targets) still runs once a minute.
+  intervals.track   = setInterval(fastQuoteTick, 15000);
   intervals.chart   = setInterval(() => loadNiftyChart(niftyChartRange), 5 * 60 * 1000);
   intervals.health  = setInterval(() => checkWorkerHealth(), 120000);
 
@@ -6849,34 +7107,13 @@ async function loadKVSnapshot() {
   }
 }
 
-/* ─── REAL OPTION PRICE — NSE option chain (option-chain-v3) ─── */
-async function fetchRealOptionPrice(strike, type) {
+/* ─── REAL OPTION PRICE — tiny Worker projection ─── */
+async function fetchRealOptionPrice(strike, type, opts = {}) {
   try {
     const expiry = getTargetExpiry();
-    const rows = await getOptionChain(expiry.apiDate);
-    const row = rows.find(r => Math.abs(parseFloat(r.strikePrice) - strike) < 0.01);
-    if (!row) return null;
-    const leg = row[type];
-    if (!leg) return null;
-
-    const bid  = parseFloat(leg.buyPrice1 || 0);
-    const ask  = parseFloat(leg.sellPrice1 || 0);
-    const last = parseFloat(leg.lastPrice || 0);
-    let mid = (bid > 0 && ask > 0) ? (bid + ask) / 2 : last;
-    if (!(mid > 0)) return null;
-    mid = Math.round(mid * 20) / 20; // NSE tick = 0.05
-
-    return {
-      midPrice: mid,
-      bid, ask,
-      strike, type,
-      iv: parseFloat(leg.impliedVolatility || 0),
-      oi: parseInt(leg.openInterest || 0),
-      volume: parseInt(leg.totalTradedVolume || leg.volume || 0),
-      slPrice: Math.max(0.05, Math.round(mid * 0.70 * 20) / 20),
-      expiry: expiry.apiDate,
-      source: "NSE option chain"
-    };
+    const spot = +opts.spot || getLiveSpotForQuotes() || 0;
+    const bundle = await fetchOptionQuoteBundle(strike, type, spot, opts.maxAgeMs ?? 5000);
+    return normalizeOptionLeg(bundle?.requested, strike, type, expiry, bundle?.chainTimestamp);
   } catch { return null; }
 }
 
@@ -6884,15 +7121,26 @@ async function fetchRealOptionPrice(strike, type) {
 async function updateEntryPriceFromNSE(sig, inputs) {
   if (!sig.type || !sig.primaryStrike) return;
   try {
-    const ep = await fetchRealOptionPrice(sig.primaryStrike, sig.type);
+    const bundle = await fetchOptionQuoteBundle(sig.primaryStrike, sig.type, inputs.spot, 5000);
+    const ep = normalizeOptionLeg(
+      bundle?.requested, sig.primaryStrike, sig.type,
+      sig.expiry || getTargetExpiry(), bundle?.chainTimestamp
+    );
     if (!ep || !ep.midPrice) return;
+
+    sig.quoteTs = bundle?.chainTimestamp || ep.chainTimestamp || sig.quoteTs || "";
+    sig.liveMid = ep.midPrice;
+    sig.liveBid = ep.bid;
+    sig.liveAsk = ep.ask;
+    sig.liveQuoteTs = sig.quoteTs;
+    const quoteClock = sig.quoteTs ? formatNseQuoteClock(sig.quoteTs) : "";
 
     // Update entry price display with real data
     document.getElementById("sigEntryPrice").textContent  = `₹${ep.midPrice}`;
-    document.getElementById("sigEntryRange").textContent  = `Bid:₹${ep.bid} Ask:₹${ep.ask}`;
+    document.getElementById("sigEntryRange").textContent  = `Bid:₹${ep.bid} Ask:₹${ep.ask}${quoteClock ? " · NSE " + quoteClock : ""}`;
     document.getElementById("sigExitPrice").textContent   = `₹${ep.slPrice}`;
     document.getElementById("sigExitNote").textContent    = `Exit if falls to ₹${ep.slPrice} (–30%)`;
-    document.getElementById("sigSL").textContent = `🛑 SL: Exit at ₹${ep.slPrice} · Entry ~₹${ep.midPrice} (Live NSE) · Max loss ~₹${Math.round((ep.midPrice - ep.slPrice) * NIFTY_LOT_SIZE)} per lot`;
+    document.getElementById("sigSL").textContent = `🛑 SL: Exit at ₹${ep.slPrice} · Entry ~₹${ep.midPrice} (NSE quote) · Max loss ~₹${Math.round((ep.midPrice - ep.slPrice) * NIFTY_LOT_SIZE)} per lot`;
 
     // Store real entry/SL now; targets are rebuilt below with live delta + EM.
     sig.entryMid   = ep.midPrice;
@@ -6910,7 +7158,7 @@ async function updateEntryPriceFromNSE(sig, inputs) {
     sig.optionQ = q;
 
     let em = null;
-    try { em = await fetchExpectedMove(inputs.spot, sig.expiry || getTargetExpiry()); } catch {}
+    try { em = await fetchExpectedMove(inputs.spot, sig.expiry || getTargetExpiry(), bundle); } catch {}
     if (em) sig.expMove = em;
 
     // Rebuild targets from S/R + expected move, now with the live option delta.
@@ -6957,7 +7205,7 @@ async function updateEntryPriceFromNSE(sig, inputs) {
       ? ` · T1 ${sig.emRatio.toFixed(2)}× / T2 ${sig.emRatios[1].toFixed(2)}× / T3 ${sig.emRatios[2].toFixed(2)}× daily EM (±${Math.round(em.daily)} pts)`
       : "";
     document.getElementById("sigEntryNote").innerHTML =
-      `<strong style="color:var(--green)">✓ Live NSE Price</strong> · Bid ₹${ep.bid} / Ask ₹${ep.ask} · IV: ${ep.iv?.toFixed(1) || "—"}% · OI: ${ep.oi?.toLocaleString("en-IN") || "—"} ` +
+      `<strong style="color:var(--green)">✓ NSE option quote${quoteClock ? " · as of " + quoteClock : ""}</strong> · Bid ₹${ep.bid} / Ask ₹${ep.ask} · IV: ${ep.iv?.toFixed(1) || "—"}% · OI: ${ep.oi?.toLocaleString("en-IN") || "—"} ` +
       `<span style="color:var(--muted)">· Do not chase above ₹${(ep.ask * 1.05).toFixed(1)}</span>` +
       `<br><span style="color:${q.ok ? "var(--muted2)" : "#ef4444"}">${qNote}${emNote}</span>`;
 
@@ -7005,6 +7253,49 @@ async function updateEntryPriceFromNSE(sig, inputs) {
 
   } catch(e) {
     console.log("Real option price fetch failed:", e.message);
+  }
+}
+
+// Lightweight 15-second refresh: updates the displayed premium without
+// rebuilding SL/targets or re-grading. Only the full signal engine (every
+// 60 s) may recalculate planned levels.
+async function refreshSignalLiveQuote(sig) {
+  if (!sig?.type || !sig?.primaryStrike) return;
+  const spot = getLiveSpotForQuotes();
+  const bundle = await fetchOptionQuoteBundle(sig.primaryStrike, sig.type, spot, 6000);
+  const ep = normalizeOptionLeg(
+    bundle?.requested, sig.primaryStrike, sig.type,
+    sig.expiry || getTargetExpiry(), bundle?.chainTimestamp
+  );
+  if (!ep) return;
+
+  sig.liveMid = ep.midPrice;
+  sig.liveBid = ep.bid;
+  sig.liveAsk = ep.ask;
+  sig.liveQuoteTs = bundle?.chainTimestamp || ep.chainTimestamp || sig.liveQuoteTs || "";
+  const quoteClock = sig.liveQuoteTs ? formatNseQuoteClock(sig.liveQuoteTs) : "";
+
+  const priceEl = document.getElementById("sigEntryPrice");
+  if (priceEl) priceEl.textContent = `₹${ep.midPrice}`;
+  const rangeEl = document.getElementById("sigEntryRange");
+  if (rangeEl) {
+    rangeEl.textContent = `Bid:₹${ep.bid} Ask:₹${ep.ask}${quoteClock ? " · NSE " + quoteClock : ""}`;
+  }
+}
+
+let _fastQuoteBusy = false;
+async function fastQuoteTick() {
+  if (!canRunSignalEngine() || _fastQuoteBusy) return;
+  _fastQuoteBusy = true;
+  try {
+    const open = getOpenPosition();
+    const sig = currentSignal;
+    const jobs = [];
+    if (open) jobs.push(trackOpenPosition());
+    if (sig?.type && sig?.primaryStrike) jobs.push(refreshSignalLiveQuote(sig));
+    if (jobs.length) await Promise.allSettled(jobs);
+  } finally {
+    _fastQuoteBusy = false;
   }
 }
 
@@ -7064,10 +7355,11 @@ function updateSignalEntryControls() {
 
 function useLiveSignalEntry() {
   const sig = currentSignal;
-  if (!sig?.entryMid) return;
+  const px = sig?.liveMid || sig?.entryMid;
+  if (!(px > 0)) return;
   const input = document.getElementById("sigEntryInput");
   if (input) {
-    input.value = sig.entryMid;
+    input.value = px;
     renderActualEntryNote(sig);
   }
 }
